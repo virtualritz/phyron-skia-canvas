@@ -1,8 +1,6 @@
 name: Publish to NPM
 on:
   workflow_dispatch:
-  release:
-    types: [released]
 
 permissions:
   contents: read

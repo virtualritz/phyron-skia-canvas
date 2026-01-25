@@ -1,9 +1,6 @@
 name: Compile binaries
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
 
 jobs:
   mac:
