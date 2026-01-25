@@ -6,7 +6,7 @@ const fs = require("fs"),
   tmp = require("tmp"),
   path = require("path"),
   { assert, describe, test, beforeEach, afterEach } = require("../runner"),
-  { Canvas, Image } = require("../../lib");
+  { Canvas, Image, backend } = require("../../lib");
 
 const BLACK = [0, 0, 0, 255],
   WHITE = [255, 255, 255, 255],
@@ -580,5 +580,44 @@ describe("Canvas", () => {
       let canvas = new Canvas(200, 200);
       assert.doesNotThrow(() => canvas.toURLSync("png"));
     });
+  });
+});
+
+describe("backend", () => {
+  test("returns backend info without creating a canvas", () => {
+    const info = backend();
+
+    // Must have required fields
+    assert.ok(info.renderer, "renderer field is required");
+    assert.ok(
+      ["CPU", "GPU"].includes(info.renderer),
+      "renderer must be CPU or GPU",
+    );
+    assert.ok(typeof info.threads === "number", "threads must be a number");
+    assert.ok(info.threads > 0, "threads must be positive");
+    assert.ok(
+      typeof info.gpuAvailable === "boolean",
+      "gpuAvailable must be a boolean",
+    );
+
+    // GPU-specific fields
+    if (info.renderer === "GPU") {
+      assert.ok(
+        ["Vulkan", "Metal"].includes(info.api),
+        "GPU api must be Vulkan or Metal",
+      );
+      assert.ok(typeof info.device === "string", "device must be a string");
+    }
+  });
+
+  test("gpuAvailable matches renderer", () => {
+    const info = backend();
+    if (info.renderer === "GPU") {
+      assert.strictEqual(
+        info.gpuAvailable,
+        true,
+        "gpuAvailable should be true when renderer is GPU",
+      );
+    }
   });
 });
