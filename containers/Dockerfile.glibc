@@ -44,10 +44,8 @@ RUN mkdir -p /opt/skia-static-libs && \
 
 # --------------------------------------------------------------------------------------------------------
 
-FROM node:buster-slim AS skia-build-env
+FROM node:bookworm-slim AS skia-build-env
 ARG TARGETARCH
-
-COPY sources.list-buster /etc/apt/sources.list
 
 RUN apt-get update && apt-get install -y -q \
   curl wget perl zip software-properties-common lsb-release build-essential ninja-build fonts-dejavu-core
