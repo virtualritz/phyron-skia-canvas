@@ -13,7 +13,7 @@ use skia_safe::{
         vk::{BackendContext, GetProcOf},
         direct_contexts, surfaces, Budgeted, DirectContext, SurfaceOrigin
     },
-    ColorSpace, ISize, ImageInfo, Surface,
+    ColorSpace, ColorType, ISize, ImageInfo, Surface,
 };
 
 use crate::context::page::ExportOptions;
@@ -144,7 +144,7 @@ pub struct VulkanContext{
     physical_device: Arc<PhysicalDevice>,
     device: Arc<Device>,
     queue: Arc<Queue>,
-    msaa: Vec<usize>,
+    vk_sample_counts: vulkano::image::SampleCounts,
     last_use: Instant,
 }
 
@@ -231,18 +231,6 @@ impl VulkanContext{
         .ok_or("Failed to create Vulkan backend context")?;
 
         let vk_sample_counts = physical_device.properties().framebuffer_color_sample_counts;
-        let max_sample_count = context.max_surface_sample_count_for_color_type(
-            // even if the device claims it supports >1 samples, let skia overrule it
-            ImageInfo::new_n32_premul((0,0), None).color_type()
-        );
-        let mut msaa:Vec<usize> = [1,2,4,8,16,32].into_iter()
-            .filter(|s| s <= &max_sample_count)
-            .filter_map(|s| vulkano::image::SampleCount::try_from(s as u32).ok() )
-            .filter(|s| vk_sample_counts.contains_enum(*s) )
-            .map(|s| s as usize)
-            .collect();
-
-        msaa.insert(0, 0); // also include the shader-based AA option
 
         Ok(Self {
             context,
@@ -251,9 +239,22 @@ impl VulkanContext{
             physical_device,
             device,
             queue,
-            msaa,
+            vk_sample_counts,
             last_use: Instant::now() + VK_CONTEXT_LIFESPAN
         })
+    }
+
+    /// Compute valid MSAA sample counts for a given color type
+    fn msaa_for_color_type(&self, color_type: ColorType) -> Vec<usize> {
+        let max_sample_count = self.context.max_surface_sample_count_for_color_type(color_type);
+        let mut msaa: Vec<usize> = [1,2,4,8,16,32].into_iter()
+            .filter(|s| s <= &max_sample_count)
+            .filter_map(|s| vulkano::image::SampleCount::try_from(s as u32).ok())
+            .filter(|s| self.vk_sample_counts.contains_enum(*s))
+            .map(|s| s as usize)
+            .collect();
+        msaa.insert(0, 0); // also include the shader-based AA option
+        msaa
     }
 
     pub fn works(&mut self) -> bool{
@@ -265,17 +266,18 @@ impl VulkanContext{
 
     pub fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String> {
         self.last_use = Instant::now();
+        let msaa = self.msaa_for_color_type(image_info.color_type());
         surfaces::render_target(
             &mut self.context,
             Budgeted::Yes,
             image_info,
-            Some(opts.msaa_from(&self.msaa)?),
+            Some(opts.msaa_from(&msaa)?),
             SurfaceOrigin::BottomLeft,
             Some(&opts.surface_props()),
             false,
             None,
         ).ok_or(
-            format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height())
+            format!("Could not allocate new {}×{} bitmap (color type: {:?})", image_info.width(), image_info.height(), image_info.color_type())
         )
     }
 

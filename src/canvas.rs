@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 use std::cell::RefCell;
 use neon::prelude::*;
-use skia_safe::SurfaceProps;
+use skia_safe::{ColorType, ColorSpace, SurfaceProps};
 use serde_json::json;
 use crate::utils::*;
 use crate::context::page::{ExportOptions, pages_arg};
@@ -16,12 +16,14 @@ pub struct Canvas{
   pub text_contrast: f64,
   pub text_gamma: f64,
   pub gpu_disabled: bool,
+  pub color_type: ColorType,
+  pub color_space: ColorSpace,
   engine: Option<gpu::RenderingEngine>,
 }
 
 impl Canvas{
-  pub fn new(text_contrast:f64, text_gamma:f64, gpu_disabled:bool) -> Self{
-    Canvas{width:300.0, height:150.0, text_contrast, text_gamma, gpu_disabled, engine:None}
+  pub fn new(text_contrast:f64, text_gamma:f64, gpu_disabled:bool, color_type:ColorType, color_space:ColorSpace) -> Self{
+    Canvas{width:300.0, height:150.0, text_contrast, text_gamma, gpu_disabled, color_type, color_space, engine:None}
   }
 
   pub fn engine(&mut self) -> gpu::RenderingEngine{
@@ -31,7 +33,13 @@ impl Canvas{
   }
 
   pub fn export_options(&self) -> ExportOptions{
-    ExportOptions{text_contrast:self.text_contrast as _, text_gamma:self.text_gamma as _, ..Default::default()}
+    ExportOptions{
+      text_contrast: self.text_contrast as _,
+      text_gamma: self.text_gamma as _,
+      color_type: self.color_type,
+      color_space: self.color_space.clone(),
+      ..Default::default()
+    }
   }
 }
 
@@ -55,7 +63,13 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
   }
 
   let gpu_enabled = bool_for_key(&mut cx, &opts, "gpu")?;
-  let this = RefCell::new(Canvas::new(text_contrast as f64, text_gamma as f64, !gpu_enabled));
+  let color_type = opt_string_for_key(&mut cx, &opts, "colorType")
+    .map(|mode| to_color_type(&mode))
+    .unwrap_or(ColorType::RGBA8888);
+  let color_space = opt_string_for_key(&mut cx, &opts, "colorSpace")
+    .map(|mode| to_color_space(&mode))
+    .unwrap_or_else(ColorSpace::new_srgb);
+  let this = RefCell::new(Canvas::new(text_contrast as f64, text_gamma as f64, !gpu_enabled, color_type, color_space));
   Ok(cx.boxed(this))
 }
 

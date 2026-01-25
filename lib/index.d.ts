@@ -1,4 +1,4 @@
-import {Sharp} from "sharp"
+import { Sharp } from "sharp";
 
 //
 // Geometry
@@ -25,7 +25,7 @@ interface DOMPoint extends DOMPointReadOnly {
 
 declare var DOMPoint: {
   prototype: DOMPoint;
-  new(x?: number, y?: number, z?: number, w?: number): DOMPoint;
+  new (x?: number, y?: number, z?: number, w?: number): DOMPoint;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMPoint/fromPoint_static) */
   fromPoint(other?: DOMPointInit): DOMPoint;
 };
@@ -47,11 +47,10 @@ interface DOMPointReadOnly {
 
 declare var DOMPointReadOnly: {
   prototype: DOMPointReadOnly;
-  new(x?: number, y?: number, z?: number, w?: number): DOMPointReadOnly;
+  new (x?: number, y?: number, z?: number, w?: number): DOMPointReadOnly;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMPointReadOnly/fromPoint_static) */
   fromPoint(other?: DOMPointInit): DOMPointReadOnly;
 };
-
 
 /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRect) */
 interface DOMRect extends DOMRectReadOnly {
@@ -70,7 +69,7 @@ interface DOMRectInit {
 
 declare var DOMRect: {
   prototype: DOMRect;
-  new(x?: number, y?: number, width?: number, height?: number): DOMRect;
+  new (x?: number, y?: number, width?: number, height?: number): DOMRect;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRect/fromRect_static) */
   fromRect(other?: DOMRectInit): DOMRect;
 };
@@ -83,7 +82,7 @@ interface DOMRectList {
 
 declare var DOMRectList: {
   prototype: DOMRectList;
-  new(): DOMRectList;
+  new (): DOMRectList;
 };
 
 /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRectReadOnly) */
@@ -109,79 +108,136 @@ interface DOMRectReadOnly {
 
 declare var DOMRectReadOnly: {
   prototype: DOMRectReadOnly;
-  new(x?: number, y?: number, width?: number, height?: number): DOMRectReadOnly;
+  new (
+    x?: number,
+    y?: number,
+    width?: number,
+    height?: number,
+  ): DOMRectReadOnly;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/DOMRectReadOnly/fromRect_static) */
   fromRect(other?: DOMRectInit): DOMRectReadOnly;
 };
-
 
 //
 // Images
 //
 
-export function loadImage(src: string | URL, options?: RequestInit): Promise<Image>
-export function loadImage(src: Sharp | Buffer): Promise<Image>
+export function loadImage(
+  src: string | URL,
+  options?: RequestInit,
+): Promise<Image>;
+export function loadImage(src: Sharp | Buffer): Promise<Image>;
 
-export function loadImageData(src: string | Buffer | URL, width: number, height?:number): Promise<ImageData>
-export function loadImageData(src: string | Buffer | URL, width: number, height:number, settings?:ImageDataSettings & RequestInit): Promise<ImageData>
-export function loadImageData(src: Sharp): Promise<ImageData>
+export function loadImageData(
+  src: string | Buffer | URL,
+  width: number,
+  height?: number,
+): Promise<ImageData>;
+export function loadImageData(
+  src: string | Buffer | URL,
+  width: number,
+  height: number,
+  settings?: ImageDataSettings & RequestInit,
+): Promise<ImageData>;
+export function loadImageData(src: Sharp): Promise<ImageData>;
 
-export type ColorSpace = "srgb" // add "display-p3" when skia_safe supports it
-export type ColorType = "Alpha8" | "Gray8" | "R8UNorm" | // 1 byte/px
-  "A16Float" | "A16UNorm" | "ARGB4444" | "R8G8UNorm" | "RGB565" | // 2 bytes/px
-  "rgb"|"RGB888x" | "rgba"|"RGBA8888" | "bgra"|"BGRA8888" | "BGR101010x" | "BGRA1010102" | // 4 bytes/px
-  "R16G16Float" | "R16G16UNorm" | "RGB101010x" | "RGBA1010102" | "RGBA8888" |  "SRGBA8888" | // 4 bytes/px
-  "R16G16B16A16UNorm" | "RGBAF16" | "RGBAF16Norm" | // 8 bytes/px
-  "RGBAF32" // 16 bytes/px
+// Color spaces for rendering surfaces
+export type ColorSpace =
+  | "srgb" // Standard sRGB with gamma (default)
+  | "srgb-linear"
+  | "linear" // Linear sRGB for HDR compositing
+  | "display-p3"
+  | "p3" // Display P3 (wide gamut, Apple devices)
+  | "display-p3-linear"
+  | "p3-linear" // Display P3 with linear transfer
+  | "rec2020"
+  | "bt2020" // Rec. 2020 (wide gamut for UHD)
+  | "rec2020-linear"
+  | "bt2020-linear" // Rec. 2020 with linear transfer
+  | "rec2020-pq"
+  | "hdr10" // Rec. 2020 + PQ transfer (HDR10)
+  | "rec2020-hlg"
+  | "hlg"; // Rec. 2020 + HLG transfer (broadcast HDR)
+export type ColorType =
+  | "Alpha8"
+  | "Gray8"
+  | "R8UNorm" // 1 byte/px
+  | "A16Float"
+  | "A16UNorm"
+  | "ARGB4444"
+  | "R8G8UNorm"
+  | "RGB565" // 2 bytes/px
+  | "rgb"
+  | "RGB888x"
+  | "rgba"
+  | "RGBA8888"
+  | "bgra"
+  | "BGRA8888"
+  | "BGR101010x"
+  | "BGRA1010102" // 4 bytes/px
+  | "R16G16Float"
+  | "R16G16UNorm"
+  | "RGB101010x"
+  | "RGBA1010102"
+  | "RGBA8888"
+  | "SRGBA8888" // 4 bytes/px
+  | "R16G16B16A16UNorm"
+  | "RGBAF16"
+  | "RGBAF16Norm" // 8 bytes/px
+  | "RGBAF32"; // 16 bytes/px
 
 interface ImageDataSettings {
-  colorSpace?: ColorSpace
-  colorType?: ColorType
+  colorSpace?: ColorSpace;
+  colorType?: ColorType;
 }
 
 interface ImageDataExportSettings {
   /** Background color to draw beneath transparent parts of the canvas */
-  matte?: string
+  matte?: string;
 
   /** Number of pixels per grid ‘point’ (defaults to 1) */
-  density?: number
+  density?: number;
 
   /** Number of samples used for antialising each pixel */
-  msaa?: number | boolean
+  msaa?: number | boolean;
 
   /** Color space (must be "srgb") */
-  colorSpace?: ColorSpace
+  colorSpace?: ColorSpace;
 
   /** Color type to use when exporting in "raw" format */
-  colorType?: ColorType
+  colorType?: ColorType;
 }
-
 
 export class ImageData {
-  prototype: ImageData
-  constructor(sw: number, sh: number, settings?: ImageDataSettings)
-  constructor(data: Uint8ClampedArray | Buffer, sw: number, sh?: number, settings?: ImageDataSettings)
-  constructor(image: Image, settings?: ImageDataSettings)
-  constructor(imageData: ImageData)
+  prototype: ImageData;
+  constructor(sw: number, sh: number, settings?: ImageDataSettings);
+  constructor(
+    data: Uint8ClampedArray | Buffer,
+    sw: number,
+    sh?: number,
+    settings?: ImageDataSettings,
+  );
+  constructor(image: Image, settings?: ImageDataSettings);
+  constructor(imageData: ImageData);
 
-  readonly colorSpace: ColorSpace
-  readonly colorType: ColorType
-  readonly data: Uint8ClampedArray
-  readonly height: number
-  readonly width: number
-  toSharp(): Sharp
+  readonly colorSpace: ColorSpace;
+  readonly colorType: ColorType;
+  readonly data: Uint8ClampedArray;
+  readonly height: number;
+  readonly width: number;
+  toSharp(): Sharp;
 }
 
-export class Image extends EventEmitter{
-  constructor(data?: Buffer | URL | string, src?: string)
-  get src(): string
-  set src(src: string | URL | Buffer | Sharp)
-  get width(): number
-  get height(): number
+export class Image extends EventEmitter {
+  constructor(data?: Buffer | URL | string, src?: string);
+  get src(): string;
+  set src(src: string | URL | Buffer | Sharp);
+  get width(): number;
+  get height(): number;
   onload: ((this: Image, image: Image) => any) | null;
   onerror: ((this: Image, error: Error) => any) | null;
-  complete: boolean
-  decode(): Promise<Image>
+  complete: boolean;
+  decode(): Promise<Image>;
 }
 
 //
@@ -218,124 +274,193 @@ interface DOMMatrixInit extends DOMMatrix2DInit {
 }
 
 interface DOMMatrix {
-  a: number, b: number, c: number, d: number, e: number, f: number,
-  m11: number, m12: number, m13: number, m14: number,
-  m21: number, m22: number, m23: number, m24: number,
-  m31: number, m32: number, m33: number, m34: number,
-  m41: number, m42: number, m43: number, m44: number,
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+  m11: number;
+  m12: number;
+  m13: number;
+  m14: number;
+  m21: number;
+  m22: number;
+  m23: number;
+  m24: number;
+  m31: number;
+  m32: number;
+  m33: number;
+  m34: number;
+  m41: number;
+  m42: number;
+  m43: number;
+  m44: number;
 
-  flipX(): DOMMatrix
-  flipY(): DOMMatrix
-  inverse(): DOMMatrix
-  invertSelf(): DOMMatrix
+  flipX(): DOMMatrix;
+  flipY(): DOMMatrix;
+  inverse(): DOMMatrix;
+  invertSelf(): DOMMatrix;
 
-  multiply(other?: DOMMatrixInit): DOMMatrix
-  multiplySelf(other?: DOMMatrixInit): DOMMatrix
-  preMultiplySelf(other?: DOMMatrixInit): DOMMatrix
+  multiply(other?: DOMMatrixInit): DOMMatrix;
+  multiplySelf(other?: DOMMatrixInit): DOMMatrix;
+  preMultiplySelf(other?: DOMMatrixInit): DOMMatrix;
 
-  rotate(rotX?: number, rotY?: number, rotZ?: number): DOMMatrix
-  rotateSelf(rotX?: number, rotY?: number, rotZ?: number): DOMMatrix
-  rotateAxisAngle(x?: number, y?: number, z?: number, angle?: number): DOMMatrix
-  rotateAxisAngleSelf(x?: number, y?: number, z?: number, angle?: number): DOMMatrix
-  rotateFromVector(x?: number, y?: number): DOMMatrix
-  rotateFromVectorSelf(x?: number, y?: number): DOMMatrix
+  rotate(rotX?: number, rotY?: number, rotZ?: number): DOMMatrix;
+  rotateSelf(rotX?: number, rotY?: number, rotZ?: number): DOMMatrix;
+  rotateAxisAngle(
+    x?: number,
+    y?: number,
+    z?: number,
+    angle?: number,
+  ): DOMMatrix;
+  rotateAxisAngleSelf(
+    x?: number,
+    y?: number,
+    z?: number,
+    angle?: number,
+  ): DOMMatrix;
+  rotateFromVector(x?: number, y?: number): DOMMatrix;
+  rotateFromVectorSelf(x?: number, y?: number): DOMMatrix;
 
-  scale(scaleX?: number, scaleY?: number, scaleZ?: number, originX?: number, originY?: number, originZ?: number): DOMMatrix
-  scaleSelf(scaleX?: number, scaleY?: number, scaleZ?: number, originX?: number, originY?: number, originZ?: number): DOMMatrix
-  scale3d(scale?: number, originX?: number, originY?: number, originZ?: number): DOMMatrix
-  scale3dSelf(scale?: number, originX?: number, originY?: number, originZ?: number): DOMMatrix
+  scale(
+    scaleX?: number,
+    scaleY?: number,
+    scaleZ?: number,
+    originX?: number,
+    originY?: number,
+    originZ?: number,
+  ): DOMMatrix;
+  scaleSelf(
+    scaleX?: number,
+    scaleY?: number,
+    scaleZ?: number,
+    originX?: number,
+    originY?: number,
+    originZ?: number,
+  ): DOMMatrix;
+  scale3d(
+    scale?: number,
+    originX?: number,
+    originY?: number,
+    originZ?: number,
+  ): DOMMatrix;
+  scale3dSelf(
+    scale?: number,
+    originX?: number,
+    originY?: number,
+    originZ?: number,
+  ): DOMMatrix;
 
-  skew(sx?: number, sy?:number): DOMMatrix
-  skewSelf(sx?: number, sy?:number): DOMMatrix
-  skewX(sx?: number): DOMMatrix
-  skewXSelf(sx?: number): DOMMatrix
-  skewY(sy?: number): DOMMatrix
-  skewYSelf(sy?: number): DOMMatrix
+  skew(sx?: number, sy?: number): DOMMatrix;
+  skewSelf(sx?: number, sy?: number): DOMMatrix;
+  skewX(sx?: number): DOMMatrix;
+  skewXSelf(sx?: number): DOMMatrix;
+  skewY(sy?: number): DOMMatrix;
+  skewYSelf(sy?: number): DOMMatrix;
 
-  translate(tx?: number, ty?: number, tz?: number): DOMMatrix
-  translateSelf(tx?: number, ty?: number, tz?: number): DOMMatrix
+  translate(tx?: number, ty?: number, tz?: number): DOMMatrix;
+  translateSelf(tx?: number, ty?: number, tz?: number): DOMMatrix;
 
-  setMatrixValue(transformList: string): DOMMatrix
-  transformPoint(point?: DOMPointInit): DOMPoint
+  setMatrixValue(transformList: string): DOMMatrix;
+  transformPoint(point?: DOMPointInit): DOMPoint;
 
-  toFloat32Array(): Float32Array
-  toFloat64Array(): Float64Array
-  toJSON(): any
-  toString(): string
-  clone(): DOMMatrix
+  toFloat32Array(): Float32Array;
+  toFloat64Array(): Float64Array;
+  toJSON(): any;
+  toString(): string;
+  clone(): DOMMatrix;
 }
 
 type FixedLenArray<T, L extends number> = T[] & { length: L };
-type Matrix = string | DOMMatrix | { a: number, b: number, c: number, d: number, e: number, f: number } | FixedLenArray<number, 6> | FixedLenArray<number, 16>
+type Matrix =
+  | string
+  | DOMMatrix
+  | { a: number; b: number; c: number; d: number; e: number; f: number }
+  | FixedLenArray<number, 6>
+  | FixedLenArray<number, 16>;
 
 declare var DOMMatrix: {
-  prototype: DOMMatrix
-  new(init?: Matrix): DOMMatrix
-  fromFloat32Array(array32: Float32Array): DOMMatrix
-  fromFloat64Array(array64: Float64Array): DOMMatrix
-  fromMatrix(other?: DOMMatrixInit): DOMMatrix
-}
+  prototype: DOMMatrix;
+  new (init?: Matrix): DOMMatrix;
+  fromFloat32Array(array32: Float32Array): DOMMatrix;
+  fromFloat64Array(array64: Float64Array): DOMMatrix;
+  fromMatrix(other?: DOMMatrixInit): DOMMatrix;
+};
 
 //
 // Canvas
 //
 
-export type ExportFormat = "png" | "jpg" | "jpeg" | "webp" | "raw" | "pdf" | "svg";
-export type FontOptions = "outline" | "device-independent"
+export type ExportFormat =
+  | "png"
+  | "jpg"
+  | "jpeg"
+  | "webp"
+  | "raw"
+  | "pdf"
+  | "svg";
+export type FontOptions = "outline" | "device-independent";
 
 export interface RenderOptions {
   /** Page to export: Defaults to 1 (i.e., first page) */
-  page?: number
+  page?: number;
 
   /** Background color to draw beneath transparent parts of the canvas */
-  matte?: string
+  matte?: string;
 
   /** Number of pixels per grid ‘point’ (defaults to 1) */
-  density?: number
+  density?: number;
 
   /** Number of samples used for antialising each pixel */
-  msaa?: number | boolean
+  msaa?: number | boolean;
 }
 
 export interface ExportOptions extends RenderOptions {
   /** Quality for lossy encodings like JPEG & WEBP (0.0–1.0) */
-  quality?: number
+  quality?: number;
 
   /** Optionally convert text to bézier paths (SVG only) */
-  outline?: boolean
+  outline?: boolean;
 
   /** Optionally use 4:2:0 chroma subsampling (JPEG only) */
-  downsample?: boolean
+  downsample?: boolean;
 
   /** Color type to use when exporting in "raw" format */
-  colorType?: ColorType
+  colorType?: ColorType;
 }
 
 export interface SaveOptions extends ExportOptions {
   /** Image format to use (either as a file extension or a mime-type string) */
-  format?: ExportFormat
+  format?: ExportFormat;
 }
 
 export interface EngineDetails {
-  renderer: "CPU" | "GPU"
-  api: "Vulkan" | "Metal"
-  device: string
-  driver?: string
-  threads: number
-  error?: string
+  renderer: "CPU" | "GPU";
+  api: "Vulkan" | "Metal";
+  device: string;
+  driver?: string;
+  threads: number;
+  error?: string;
 }
 
-export interface TextOptions{
+export interface TextOptions {
   /** Amount of additional contrast to add when rendering text (defaults to 0) */
-  textContrast?: number
+  textContrast?: number;
 
   /** Gamma value for blending the edges of letterforms (defaults to 1.4) */
-  textGamma?: number
+  textGamma?: number;
+
+  /** Surface pixel format for high-precision/HDR rendering (defaults to "rgba") */
+  colorType?: ColorType;
+
+  /** Color space for rendering (defaults to "srgb", use "srgb-linear" for HDR workflows) */
+  colorSpace?: ColorSpace;
 }
 
 /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas) */
 export class Canvas {
-  static contexts: WeakMap<Canvas, readonly CanvasRenderingContext2D[]>
+  static contexts: WeakMap<Canvas, readonly CanvasRenderingContext2D[]>;
   /**
    * Gets or sets the height of a canvas element on a document.
    *
@@ -350,7 +475,7 @@ export class Canvas {
   width: number;
 
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#creating-new-canvas-objects) */
-  constructor(width?: number, height?: number, options?: TextOptions)
+  constructor(width?: number, height?: number, options?: TextOptions);
 
   /**
    * Returns an object that provides methods and properties for drawing and manipulating images and graphics on a canvas element in a document. A context object includes information about colors, line widths, fonts, and other graphic parameters that can be drawn on a canvas.
@@ -358,45 +483,45 @@ export class Canvas {
    *
    * [MDN Reference](https://developer.mozilla.org/docs/Web/API/HTMLCanvasElement/getContext)
    */
-  getContext(type?: "2d"): CanvasRenderingContext2D
-  newPage(width?: number, height?: number): CanvasRenderingContext2D
-  readonly pages: CanvasRenderingContext2D[]
+  getContext(type?: "2d"): CanvasRenderingContext2D;
+  newPage(width?: number, height?: number): CanvasRenderingContext2D;
+  readonly pages: CanvasRenderingContext2D[];
 
-  get gpu(): boolean
-  set gpu(enabled: boolean)
-  readonly engine: EngineDetails
+  get gpu(): boolean;
+  set gpu(enabled: boolean);
+  readonly engine: EngineDetails;
 
   /** @deprecated Use {@link Canvas.toFile()} instead */
-  saveAs(filename: string, options?: SaveOptions): Promise<void>
+  saveAs(filename: string, options?: SaveOptions): Promise<void>;
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tofile): toFile() */
-  toFile(filename: string, options?: SaveOptions): Promise<void>
+  toFile(filename: string, options?: SaveOptions): Promise<void>;
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tobuffer) */
-  toBuffer(format: ExportFormat, options?: ExportOptions): Promise<Buffer>
+  toBuffer(format: ExportFormat, options?: ExportOptions): Promise<Buffer>;
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tourl) */
-  toURL(format: ExportFormat, options?: ExportOptions): Promise<string>
+  toURL(format: ExportFormat, options?: ExportOptions): Promise<string>;
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tosharp) */
-  toSharp(options?: RenderOptions): Sharp
+  toSharp(options?: RenderOptions): Sharp;
 
   /** @deprecated Use {@link Canvas.toFileSync()} instead */
-  saveAsSync(filename: string, options?: SaveOptions): void
+  saveAsSync(filename: string, options?: SaveOptions): void;
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tobuffer) */
-  toBufferSync(format: ExportFormat, options?: ExportOptions): Buffer
+  toBufferSync(format: ExportFormat, options?: ExportOptions): Buffer;
   /** @deprecated {@link Canvas.toDataURL()} is now synchronous; use it instead */
-  toDataURLSync(format: ExportFormat, options?: ExportOptions): string
+  toDataURLSync(format: ExportFormat, options?: ExportOptions): string;
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tourl) */
-  toURLSync(format: ExportFormat, options?: ExportOptions): string
+  toURLSync(format: ExportFormat, options?: ExportOptions): string;
   /** [Skia Canvas Docs](https://skia-canvas.org/api/canvas#tosharp) */
-  toSharpSync(options?: RenderOptions): Sharp
+  toSharpSync(options?: RenderOptions): Sharp;
 
   /** [MDN Reference](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/toDataURL) */
-  toDataURL(format: ExportFormat, quality?: number): string
+  toDataURL(format: ExportFormat, quality?: number): string;
 
-  get raw(): Promise<Buffer>
-  get pdf(): Promise<Buffer>
-  get svg(): Promise<Buffer>
-  get jpg(): Promise<Buffer>
-  get png(): Promise<Buffer>
-  get webp(): Promise<Buffer>
+  get raw(): Promise<Buffer>;
+  get pdf(): Promise<Buffer>;
+  get svg(): Promise<Buffer>;
+  get jpg(): Promise<Buffer>;
+  get png(): Promise<Buffer>;
+  get webp(): Promise<Buffer>;
 }
 
 //
@@ -408,9 +533,16 @@ export class Canvas {
  *
  * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasPattern)
  */
-export class CanvasPattern{
+export class CanvasPattern {
   setTransform(transform: Matrix): void;
-  setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void
+  setTransform(
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    e: number,
+    f: number,
+  ): void;
 }
 
 /**
@@ -431,12 +563,10 @@ interface CanvasGradient {
 
 declare var CanvasGradient: {
   prototype: CanvasGradient;
-  new(): CanvasGradient;
+  new (): CanvasGradient;
 };
 
-
 export class CanvasTexture {}
-
 
 //
 // Context
@@ -446,51 +576,143 @@ type CanvasDrawable = Canvas | Image | ImageData;
 type CanvasPatternSource = Canvas | Image;
 type CanvasDirection = "inherit" | "ltr" | "rtl";
 type CanvasFillRule = "evenodd" | "nonzero";
-type CanvasFontStretch = "condensed" | "expanded" | "extra-condensed" | "extra-expanded" | "normal" | "semi-condensed" | "semi-expanded" | "ultra-condensed" | "ultra-expanded";
-type CanvasTextAlign = "center" | "end" | "left" | "right" | "start" | "justify";
-type CanvasTextBaseline = "alphabetic" | "bottom" | "hanging" | "ideographic" | "middle" | "top";
+type CanvasFontStretch =
+  | "condensed"
+  | "expanded"
+  | "extra-condensed"
+  | "extra-expanded"
+  | "normal"
+  | "semi-condensed"
+  | "semi-expanded"
+  | "ultra-condensed"
+  | "ultra-expanded";
+type CanvasTextAlign =
+  | "center"
+  | "end"
+  | "left"
+  | "right"
+  | "start"
+  | "justify";
+type CanvasTextBaseline =
+  | "alphabetic"
+  | "bottom"
+  | "hanging"
+  | "ideographic"
+  | "middle"
+  | "top";
 type CanvasLineCap = "butt" | "round" | "square";
 type CanvasLineJoin = "bevel" | "miter" | "round";
 // type CanvasFontKerning = "auto" | "none" | "normal";
 // type CanvasFontVariantCaps = "all-petite-caps" | "all-small-caps" | "normal" | "petite-caps" | "small-caps" | "titling-caps" | "unicase";
 // type CanvasTextRendering = "auto" | "geometricPrecision" | "optimizeLegibility" | "optimizeSpeed";
 
-type Offset = [x: number, y: number] | number
-type QuadOrRect = [x1:number, y1:number, x2:number, y2:number, x3:number, y3:number, x4:number, y4:number] |
-                  [left:number, top:number, right:number, bottom:number] | [width:number, height:number]
-type GlobalCompositeOperation = "color" | "color-burn" | "color-dodge" | "copy" | "darken" | "destination-atop" | "destination-in" | "destination-out" | "destination-over" | "difference" | "exclusion" | "hard-light" | "hue" | "lighten" | "lighter" | "luminosity" | "multiply" | "overlay" | "saturation" | "screen" | "soft-light" | "source-atop" | "source-in" | "source-out" | "source-over" | "xor";
+type Offset = [x: number, y: number] | number;
+type QuadOrRect =
+  | [
+      x1: number,
+      y1: number,
+      x2: number,
+      y2: number,
+      x3: number,
+      y3: number,
+      x4: number,
+      y4: number,
+    ]
+  | [left: number, top: number, right: number, bottom: number]
+  | [width: number, height: number];
+type GlobalCompositeOperation =
+  | "color"
+  | "color-burn"
+  | "color-dodge"
+  | "copy"
+  | "darken"
+  | "destination-atop"
+  | "destination-in"
+  | "destination-out"
+  | "destination-over"
+  | "difference"
+  | "exclusion"
+  | "hard-light"
+  | "hue"
+  | "lighten"
+  | "lighter"
+  | "luminosity"
+  | "multiply"
+  | "overlay"
+  | "saturation"
+  | "screen"
+  | "soft-light"
+  | "source-atop"
+  | "source-in"
+  | "source-out"
+  | "source-over"
+  | "xor";
 type ImageSmoothingQuality = "high" | "low" | "medium";
 
-type FontVariantSetting = "normal" |
-/* alternates */ "historical-forms" |
-/* caps */ "small-caps" | "all-small-caps" | "petite-caps" | "all-petite-caps" | "unicase" | "titling-caps" |
-/* numeric */ "lining-nums" | "oldstyle-nums" | "proportional-nums" | "tabular-nums" | "diagonal-fractions" | "stacked-fractions" | "ordinal" | "slashed-zero" |
-/* ligatures */ "common-ligatures" | "no-common-ligatures" | "discretionary-ligatures" | "no-discretionary-ligatures" | "historical-ligatures" | "no-historical-ligatures" | "contextual" | "no-contextual" |
-/* east-asian */ "jis78" | "jis83" | "jis90" | "jis04" | "simplified" | "traditional" | "full-width" | "proportional-width" | "ruby" |
-/* position */ "super" | "sub";
-
+type FontVariantSetting =
+  | "normal"
+  /* alternates */
+  | "historical-forms"
+  /* caps */
+  | "small-caps"
+  | "all-small-caps"
+  | "petite-caps"
+  | "all-petite-caps"
+  | "unicase"
+  | "titling-caps"
+  /* numeric */
+  | "lining-nums"
+  | "oldstyle-nums"
+  | "proportional-nums"
+  | "tabular-nums"
+  | "diagonal-fractions"
+  | "stacked-fractions"
+  | "ordinal"
+  | "slashed-zero"
+  /* ligatures */
+  | "common-ligatures"
+  | "no-common-ligatures"
+  | "discretionary-ligatures"
+  | "no-discretionary-ligatures"
+  | "historical-ligatures"
+  | "no-historical-ligatures"
+  | "contextual"
+  | "no-contextual"
+  /* east-asian */
+  | "jis78"
+  | "jis83"
+  | "jis90"
+  | "jis04"
+  | "simplified"
+  | "traditional"
+  | "full-width"
+  | "proportional-width"
+  | "ruby"
+  /* position */
+  | "super"
+  | "sub";
 
 export interface CreateTextureOptions {
   /** The 2D shape to be drawn in a repeating grid with the specified spacing (if omitted, parallel lines will be used) */
-  path?: Path2D
+  path?: Path2D;
 
   /** The lineWidth with which to stroke the path (if omitted, the path will be filled instead) */
-  line?: number
+  line?: number;
 
   /** The lineCap style to use if stroking the path */
-  cap?: CanvasLineCap
+  cap?: CanvasLineCap;
 
   /** The color to use for stroking/filling the path */
-  color?: string
+  color?: string;
 
   /** The orientation of the pattern grid in radians */
-  angle?: number
+  angle?: number;
 
   /** The amount by which to shift the pattern relative to the canvas origin */
-  offset?: Offset
+  offset?: Offset;
 
   /** Whether to render the texture as a single path (rather than as a repeating pattern within a clipping mask) */
-  outline?: boolean
+  outline?: boolean;
 }
 
 interface CanvasCompositing {
@@ -502,11 +724,43 @@ interface CanvasCompositing {
 
 interface CanvasDrawImage {
   drawImage(image: CanvasDrawable, dx: number, dy: number): void;
-  drawImage(image: CanvasDrawable, dx: number, dy: number, dw: number, dh: number): void;
-  drawImage(image: CanvasDrawable, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
+  drawImage(
+    image: CanvasDrawable,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ): void;
+  drawImage(
+    image: CanvasDrawable,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ): void;
   drawCanvas(image: Canvas, dx: number, dy: number): void;
-  drawCanvas(image: Canvas, dx: number, dy: number, dw: number, dh: number): void;
-  drawCanvas(image: Canvas, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
+  drawCanvas(
+    image: Canvas,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ): void;
+  drawCanvas(
+    image: Canvas,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ): void;
 }
 
 interface CanvasDrawPath {
@@ -520,7 +774,12 @@ interface CanvasDrawPath {
   fill(path: Path2D, fillRule?: CanvasFillRule): void;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/isPointInPath) */
   isPointInPath(x: number, y: number, fillRule?: CanvasFillRule): boolean;
-  isPointInPath(path: Path2D, x: number, y: number, fillRule?: CanvasFillRule): boolean;
+  isPointInPath(
+    path: Path2D,
+    x: number,
+    y: number,
+    fillRule?: CanvasFillRule,
+  ): boolean;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/isPointInStroke) */
   isPointInStroke(x: number, y: number): boolean;
   isPointInStroke(path: Path2D, x: number, y: number): boolean;
@@ -537,14 +796,29 @@ interface CanvasFillStrokeStyles {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createConicGradient) */
   createConicGradient(startAngle: number, x: number, y: number): CanvasGradient;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createLinearGradient) */
-  createLinearGradient(x0: number, y0: number, x1: number, y1: number): CanvasGradient;
+  createLinearGradient(
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): CanvasGradient;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createPattern) */
-  createPattern(image: CanvasPatternSource, repetition: string | null): CanvasPattern | null;
+  createPattern(
+    image: CanvasPatternSource,
+    repetition: string | null,
+  ): CanvasPattern | null;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createRadialGradient) */
-  createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): CanvasGradient;
+  createRadialGradient(
+    x0: number,
+    y0: number,
+    r0: number,
+    x1: number,
+    y1: number,
+    r1: number,
+  ): CanvasGradient;
 
   /** [Skia Canvas Docs](https://skia-canvas.org/api/context#createtexture) */
-  createTexture(spacing: Offset, options?: CreateTextureOptions): CanvasTexture
+  createTexture(spacing: Offset, options?: CreateTextureOptions): CanvasTexture;
 }
 
 interface CanvasFilters {
@@ -554,15 +828,33 @@ interface CanvasFilters {
 
 interface CanvasImageData {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/createImageData) */
-  createImageData(width: number, height: number, settings?: ImageDataSettings): ImageData;
+  createImageData(
+    width: number,
+    height: number,
+    settings?: ImageDataSettings,
+  ): ImageData;
   createImageData(imagedata: ImageData): ImageData;
 
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/getImageData) */
-  getImageData(x: number, y: number, width: number, height: number, settings?: ImageDataExportSettings): ImageData;
+  getImageData(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    settings?: ImageDataExportSettings,
+  ): ImageData;
 
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/putImageData) */
   putImageData(imagedata: ImageData, dx: number, dy: number): void;
-  putImageData(imagedata: ImageData, dx: number, dy: number, dirtyX: number, dirtyY: number, dirtyWidth: number, dirtyHeight: number): void;
+  putImageData(
+    imagedata: ImageData,
+    dx: number,
+    dy: number,
+    dirtyX: number,
+    dirtyY: number,
+    dirtyWidth: number,
+    dirtyHeight: number,
+  ): void;
 }
 
 interface CanvasImageSmoothing {
@@ -572,18 +864,40 @@ interface CanvasImageSmoothing {
   imageSmoothingQuality: ImageSmoothingQuality;
 }
 
-
 interface CanvasPath {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/arc) */
-  arc(x: number, y: number, radius: number, startAngle: number, endAngle: number, counterclockwise?: boolean): void;
+  arc(
+    x: number,
+    y: number,
+    radius: number,
+    startAngle: number,
+    endAngle: number,
+    counterclockwise?: boolean,
+  ): void;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/arcTo) */
   arcTo(x1: number, y1: number, x2: number, y2: number, radius: number): void;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/bezierCurveTo) */
-  bezierCurveTo(cp1x: number, cp1y: number, cp2x: number, cp2y: number, x: number, y: number): void;
+  bezierCurveTo(
+    cp1x: number,
+    cp1y: number,
+    cp2x: number,
+    cp2y: number,
+    x: number,
+    y: number,
+  ): void;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/closePath) */
   closePath(): void;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/ellipse) */
-  ellipse(x: number, y: number, radiusX: number, radiusY: number, rotation: number, startAngle: number, endAngle: number, counterclockwise?: boolean): void;
+  ellipse(
+    x: number,
+    y: number,
+    radiusX: number,
+    radiusY: number,
+    rotation: number,
+    startAngle: number,
+    endAngle: number,
+    counterclockwise?: boolean,
+  ): void;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/lineTo) */
   lineTo(x: number, y: number): void;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/moveTo) */
@@ -593,9 +907,14 @@ interface CanvasPath {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/rect) */
   rect(x: number, y: number, w: number, h: number): void;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/roundRect) */
-  roundRect(x: number, y: number, w: number, h: number, radii?: number | DOMPointInit | (number | DOMPointInit)[]): void;
+  roundRect(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    radii?: number | DOMPointInit | (number | DOMPointInit)[],
+  ): void;
 }
-
 
 interface CanvasPathDrawingStyles {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/lineCap) */
@@ -657,30 +976,29 @@ interface CanvasText {
 }
 
 interface CanvasTextDrawingStyles {
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/direction) */
-    direction: CanvasDirection;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/font) */
-    font: string;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontStretch) */
-    fontStretch: CanvasFontStretch;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/letterSpacing) */
-    letterSpacing: string;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textAlign) */
-    textAlign: CanvasTextAlign;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textBaseline) */
-    textBaseline: CanvasTextBaseline;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/wordSpacing) */
-    wordSpacing: string;
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/direction) */
+  direction: CanvasDirection;
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/font) */
+  font: string;
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontStretch) */
+  fontStretch: CanvasFontStretch;
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/letterSpacing) */
+  letterSpacing: string;
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textAlign) */
+  textAlign: CanvasTextAlign;
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textBaseline) */
+  textBaseline: CanvasTextBaseline;
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/wordSpacing) */
+  wordSpacing: string;
 
-    // UNIMPLEMENTED
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textRendering) */
-    // textRendering: CanvasTextRendering;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontKerning) */
-    // fontKerning: CanvasFontKerning;
-    /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontVariantCaps) */
-    // fontVariantCaps: CanvasFontVariantCaps;
+  // UNIMPLEMENTED
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/textRendering) */
+  // textRendering: CanvasTextRendering;
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontKerning) */
+  // fontKerning: CanvasFontKerning;
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/fontVariantCaps) */
+  // fontVariantCaps: CanvasFontVariantCaps;
 }
-
 
 interface CanvasTransform {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/getTransform) */
@@ -692,14 +1010,28 @@ interface CanvasTransform {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/scale) */
   scale(x: number, y: number): void;
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/setTransform) */
-  setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void;
+  setTransform(
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    e: number,
+    f: number,
+  ): void;
 
   /** transform argument extensions (accept DOMMatrix & matrix-like objectx, not just param lists) */
-  setTransform(transform?: Matrix): void
+  setTransform(transform?: Matrix): void;
 
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/transform) */
-  transform(a: number, b: number, c: number, d: number, e: number, f: number): void
-  transform(transform: Matrix): void
+  transform(
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    e: number,
+    f: number,
+  ): void;
+  transform(transform: Matrix): void;
 
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/translate) */
   translate(x: number, y: number): void;
@@ -711,26 +1043,48 @@ interface CanvasTransform {
  * - [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D)
  * - [Skia Canvas Docs](https://skia-canvas.org/api/context)
  */
-export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawImage, CanvasDrawPath, CanvasFillStrokeStyles, CanvasFilters, CanvasImageData, CanvasImageSmoothing, CanvasPath, CanvasPathDrawingStyles, CanvasRect, CanvasShadowStyles, CanvasState, CanvasText, CanvasTextDrawingStyles, CanvasTransform {
+export interface CanvasRenderingContext2D
+  extends
+    CanvasCompositing,
+    CanvasDrawImage,
+    CanvasDrawPath,
+    CanvasFillStrokeStyles,
+    CanvasFilters,
+    CanvasImageData,
+    CanvasImageSmoothing,
+    CanvasPath,
+    CanvasPathDrawingStyles,
+    CanvasRect,
+    CanvasShadowStyles,
+    CanvasState,
+    CanvasText,
+    CanvasTextDrawingStyles,
+    CanvasTransform {
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/canvas) */
-  readonly canvas: Canvas
-  fontVariant: FontVariantSetting
-  fontHinting: boolean
-  textWrap: boolean
-  textDecoration: string
-  lineDashMarker: Path2D | null
-  lineDashFit: "move" | "turn" | "follow"
+  readonly canvas: Canvas;
+  fontVariant: FontVariantSetting;
+  fontHinting: boolean;
+  textWrap: boolean;
+  textDecoration: string;
+  lineDashMarker: Path2D | null;
+  lineDashFit: "move" | "turn" | "follow";
 
   // skia/chrome beziers & convenience methods
-  get currentTransform(): DOMMatrix
-  set currentTransform(matrix: Matrix)
-  createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix
-  conicCurveTo(cpx: number, cpy: number, x: number, y: number, weight: number): void
+  get currentTransform(): DOMMatrix;
+  set currentTransform(matrix: Matrix);
+  createProjection(quad: QuadOrRect, basis?: QuadOrRect): DOMMatrix;
+  conicCurveTo(
+    cpx: number,
+    cpy: number,
+    x: number,
+    y: number,
+    weight: number,
+  ): void;
   // getContextAttributes(): CanvasRenderingContext2DSettings;
 
   // add optional maxWidth to work in conjunction with textWrap
-  measureText(text: string, maxWidth?: number): TextMetrics
-  outlineText(text: string, maxWidth?: number): Path2D
+  measureText(text: string, maxWidth?: number): TextMetrics;
+  outlineText(text: string, maxWidth?: number): Path2D;
 }
 
 //
@@ -738,15 +1092,15 @@ export interface CanvasRenderingContext2D extends CanvasCompositing, CanvasDrawI
 //
 
 export interface Path2DBounds {
-  readonly top: number
-  readonly left: number
-  readonly bottom: number
-  readonly right: number
-  readonly width: number
-  readonly height: number
+  readonly top: number;
+  readonly left: number;
+  readonly bottom: number;
+  readonly right: number;
+  readonly width: number;
+  readonly height: number;
 }
 
-export type Path2DEdge = [verb: string, ...args: number[]]
+export type Path2DEdge = [verb: string, ...args: number[]];
 
 /**
  * This Canvas 2D API interface is used to declare a path that can then be used on a CanvasRenderingContext2D object. The path methods of the CanvasRenderingContext2D interface are also present on this interface, which gives you the convenience of being able to retain and replay your path whenever desired.
@@ -754,9 +1108,9 @@ export type Path2DEdge = [verb: string, ...args: number[]]
  * [MDN Reference](https://developer.mozilla.org/docs/Web/API/Path2D)
  */
 interface Path2D extends CanvasPath {
-  readonly bounds: Path2DBounds
-  readonly edges: readonly Path2DEdge[]
-  d: string
+  readonly bounds: Path2DBounds;
+  readonly edges: readonly Path2DEdge[];
+  d: string;
 
   /**
    * Adds the path given by the argument to the path
@@ -765,44 +1119,50 @@ interface Path2D extends CanvasPath {
    */
   addPath(path: Path2D, transform?: DOMMatrix2DInit): void;
 
-  contains(x: number, y: number): boolean
+  contains(x: number, y: number): boolean;
   conicCurveTo(
     cpx: number,
     cpy: number,
     x: number,
     y: number,
-    weight: number
-  ): void
+    weight: number,
+  ): void;
 
-  complement(otherPath: Path2D): Path2D
-  difference(otherPath: Path2D): Path2D
-  intersect(otherPath: Path2D): Path2D
-  union(otherPath: Path2D): Path2D
-  xor(otherPath: Path2D): Path2D
-  interpolate(otherPath: Path2D, weight: number): Path2D
+  complement(otherPath: Path2D): Path2D;
+  difference(otherPath: Path2D): Path2D;
+  intersect(otherPath: Path2D): Path2D;
+  union(otherPath: Path2D): Path2D;
+  xor(otherPath: Path2D): Path2D;
+  interpolate(otherPath: Path2D, weight: number): Path2D;
 
-  jitter(segmentLength: number, amount: number, seed?: number): Path2D
-  offset(dx: number, dy: number): Path2D
-  points(step?: number): readonly [x: number, y: number][]
-  round(radius: number): Path2D
-  simplify(rule?: "nonzero" | "evenodd"): Path2D
+  jitter(segmentLength: number, amount: number, seed?: number): Path2D;
+  offset(dx: number, dy: number): Path2D;
+  points(step?: number): readonly [x: number, y: number][];
+  round(radius: number): Path2D;
+  simplify(rule?: "nonzero" | "evenodd"): Path2D;
   transform(transform: Matrix): Path2D;
-  transform(a: number, b: number, c: number, d: number, e: number, f: number): Path2D;
+  transform(
+    a: number,
+    b: number,
+    c: number,
+    d: number,
+    e: number,
+    f: number,
+  ): Path2D;
   trim(start: number, end: number, inverted?: boolean): Path2D;
   trim(start: number, inverted?: boolean): Path2D;
 
-  unwind(): Path2D
+  unwind(): Path2D;
 }
 
 declare var Path2D: {
   prototype: Path2D;
-  new(path?: Path2D | string): Path2D;
-}
+  new (path?: Path2D | string): Path2D;
+};
 
 //
 // Typography
 //
-
 
 /**
  * The dimensions of a piece of text in the canvas, as created by the CanvasRenderingContext2D.measureText() method.
@@ -836,128 +1196,174 @@ interface TextMetrics {
   readonly width: number;
 
   /** Individual metrics for each line (only applicable when context's textWrap is set to `true` ) */
-  readonly lines: TextMetricsLine[]
+  readonly lines: TextMetricsLine[];
 }
 
 declare var TextMetrics: {
   prototype: TextMetrics;
-  new(): TextMetrics;
+  new (): TextMetrics;
 };
 
 export interface TextMetricsLine {
   /** Left edge of line bounding box */
-  readonly x: number
+  readonly x: number;
   /** Top edge of line bounding box */
-  readonly y: number
+  readonly y: number;
   /** Width of line bounding box */
-  readonly width: number
+  readonly width: number;
   /** Height of line bounding box */
-  readonly height: number
+  readonly height: number;
   /** Vertical position of currently selected textBaseline */
-  readonly baseline: number
+  readonly baseline: number;
   /** Vertical position of highest ascent for all fonts used in line */
-  readonly ascent: number
+  readonly ascent: number;
   /** Vertical position of lowest descent for all fonts used in line */
-  readonly descent: number
+  readonly descent: number;
   /** Vertical position of hanging baseline (irrespective of current textBaseline setting) */
-  readonly hangingBaseline: number
+  readonly hangingBaseline: number;
   /** Vertical position of alphabetic baseline (irrespective of current textBaseline setting) */
-  readonly alphabeticBaseline: number
+  readonly alphabeticBaseline: number;
   /** Vertical position of ideographic baseline (irrespective of current textBaseline setting) */
-  readonly ideographicBaseline: number
+  readonly ideographicBaseline: number;
   /** Character index into source string of the beginning of this line */
-  readonly startIndex: number
+  readonly startIndex: number;
   /** Character index into source string of the end of this line */
-  readonly endIndex: number
+  readonly endIndex: number;
   /** Array of dimensions & metrics for each single-font subsection of the line */
-  readonly runs: TextMetricsRun[]
+  readonly runs: TextMetricsRun[];
 }
 
 export interface TextMetricsRun {
   /** Left edge of single-font run of characters */
-  readonly x: number
+  readonly x: number;
   /** Top edge of single-font run of characters */
-  readonly y: number
+  readonly y: number;
   /** Width of single-font run of characters */
-  readonly width: number
+  readonly width: number;
   /** Height of single-font run of characters */
-  readonly height: number
+  readonly height: number;
   /** Name of font family used in this run */
-  readonly family: string
+  readonly family: string;
   /** Vertical position of this font's ascent metric */
-  readonly ascent: number
+  readonly ascent: number;
   /** Vertical position of this font's descent metric */
-  readonly descent: number
+  readonly descent: number;
   /** Vertical position of this font's capital letters */
-  readonly capHeight: number
+  readonly capHeight: number;
   /** Vertical position of this font's ascender-less letters */
-  readonly xHeight: number
+  readonly xHeight: number;
   /** Vertical position of the stroke used for underlines */
-  readonly underline: number
+  readonly underline: number;
   /** Vertical position of the stroke used for strikethroughs */
-  readonly strikethrough: number
+  readonly strikethrough: number;
 }
 
 export interface FontFamily {
-  family: string
-  weights: number[]
-  widths: string[]
-  styles: string[]
+  family: string;
+  weights: number[];
+  widths: string[];
+  styles: string[];
 }
 
 export interface Font {
-  family: string
-  weight: number
-  style: string
-  width: string
-  file: string
+  family: string;
+  weight: number;
+  style: string;
+  width: string;
+  file: string;
 }
 
 interface FontLibrary {
-  families: readonly string[]
-  family(name: string): FontFamily | undefined
-  has(familyName: string): boolean
+  families: readonly string[];
+  family(name: string): FontFamily | undefined;
+  has(familyName: string): boolean;
 
-  use(familyName: string, fontPaths?: string | readonly string[]): Font[]
-  use(fontPaths: readonly string[]): Font[]
+  use(familyName: string, fontPaths?: string | readonly string[]): Font[];
+  use(fontPaths: readonly string[]): Font[];
   use(
-    families: Record<string, readonly string[] | string>
-  ): Record<string, Font[]>
+    families: Record<string, readonly string[] | string>,
+  ): Record<string, Font[]>;
 
-  reset(): void
+  reset(): void;
 }
 
-export const FontLibrary: FontLibrary
+export const FontLibrary: FontLibrary;
 
 //
 // Window & App
 //
 
 import { EventEmitter } from "stream";
-export type EventLoopMode = "node" | "native"
-export type TextInputType = "insertText" | "deleteContentBackward" | "deleteContentForward" | "insertLineBreak" | "insertCompositionText"
-export type FitStyle = "none" | "contain-x" | "contain-y" | "contain" | "cover" | "fill" | "scale-down" | "resize"
-export type CursorStyle = "default" | "crosshair" | "hand" | "arrow" | "move" | "text" | "wait" | "help" | "progress" | "not-allowed" | "context-menu" |
-                          "cell" | "vertical-text" | "alias" | "copy" | "no-drop" | "grab" | "grabbing" | "all-scroll" | "zoom-in" | "zoom-out" |
-                          "e-resize" | "n-resize" | "ne-resize" | "nw-resize" | "s-resize" | "se-resize" | "sw-resize" | "w-resize" | "ew-resize" |
-                          "ns-resize" | "nesw-resize" | "nwse-resize" | "col-resize" | "row-resize" | "none"
+export type EventLoopMode = "node" | "native";
+export type TextInputType =
+  | "insertText"
+  | "deleteContentBackward"
+  | "deleteContentForward"
+  | "insertLineBreak"
+  | "insertCompositionText";
+export type FitStyle =
+  | "none"
+  | "contain-x"
+  | "contain-y"
+  | "contain"
+  | "cover"
+  | "fill"
+  | "scale-down"
+  | "resize";
+export type CursorStyle =
+  | "default"
+  | "crosshair"
+  | "hand"
+  | "arrow"
+  | "move"
+  | "text"
+  | "wait"
+  | "help"
+  | "progress"
+  | "not-allowed"
+  | "context-menu"
+  | "cell"
+  | "vertical-text"
+  | "alias"
+  | "copy"
+  | "no-drop"
+  | "grab"
+  | "grabbing"
+  | "all-scroll"
+  | "zoom-in"
+  | "zoom-out"
+  | "e-resize"
+  | "n-resize"
+  | "ne-resize"
+  | "nw-resize"
+  | "s-resize"
+  | "se-resize"
+  | "sw-resize"
+  | "w-resize"
+  | "ew-resize"
+  | "ns-resize"
+  | "nesw-resize"
+  | "nwse-resize"
+  | "col-resize"
+  | "row-resize"
+  | "none";
 
 export type WindowOptions = {
-  title?: string
-  left?: number
-  top?: number
-  width?: number
-  height?: number
-  fit?: FitStyle
-  page?: number
-  background?: string
-  fullscreen?: boolean
-  borderless?: boolean
-  resizable?: boolean
-  visible?: boolean
-  cursor?: CursorStyle
-  canvas?: Canvas
-} & TextOptions
+  title?: string;
+  left?: number;
+  top?: number;
+  width?: number;
+  height?: number;
+  fit?: FitStyle;
+  page?: number;
+  background?: string;
+  fullscreen?: boolean;
+  borderless?: boolean;
+  resizable?: boolean;
+  visible?: boolean;
+  cursor?: CursorStyle;
+  canvas?: Canvas;
+} & TextOptions;
 
 type MouseEventProps = {
   x: number;
@@ -965,88 +1371,88 @@ type MouseEventProps = {
   pageX: number;
   pageY: number;
   button: number;
-  buttons: number,
+  buttons: number;
   ctrlKey: boolean;
   altKey: boolean;
   metaKey: boolean;
   shiftKey: boolean;
-}
+};
 
 type KeyboardEventProps = {
-  key: string
-  code: string
-  location: number
-  repeat: boolean
-  ctrlKey: boolean
-  altKey: boolean
-  metaKey: boolean
-  shiftKey: boolean
-}
+  key: string;
+  code: string;
+  location: number;
+  repeat: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+};
 
 type WindowEvents = {
-  mousedown: MouseEventProps
-  mouseup: MouseEventProps
-  mousemove: MouseEventProps
-  keydown: KeyboardEventProps
-  keyup: KeyboardEventProps
+  mousedown: MouseEventProps;
+  mouseup: MouseEventProps;
+  mousemove: MouseEventProps;
+  keydown: KeyboardEventProps;
+  keyup: KeyboardEventProps;
   input: {
-    data: string
-    inputType: TextInputType
+    data: string;
+    inputType: TextInputType;
   };
-  wheel: { deltaX: number; deltaY: number }
-  fullscreen: { enabled: boolean }
-  move: { left: number; top: number }
-  resize: { height: number; width: number }
-  frame: { frame: number }
-  draw: { frame: number }
-  blur: {}
-  focus: {}
-  setup: {}
-  close: {}
-}
+  wheel: { deltaX: number; deltaY: number };
+  fullscreen: { enabled: boolean };
+  move: { left: number; top: number };
+  resize: { height: number; width: number };
+  frame: { frame: number };
+  draw: { frame: number };
+  blur: {};
+  focus: {};
+  setup: {};
+  close: {};
+};
 
 export class Window extends EventEmitter<{
   [EventName in keyof WindowEvents]: [
     {
       target: Window;
       type: EventName;
-    } & WindowEvents[EventName]
-  ]
-}>{
-  constructor(width: number, height: number, options?: WindowOptions)
-  constructor(options?: WindowOptions)
+    } & WindowEvents[EventName],
+  ];
+}> {
+  constructor(width: number, height: number, options?: WindowOptions);
+  constructor(options?: WindowOptions);
 
-  readonly ctx: CanvasRenderingContext2D
-  canvas: Canvas
-  visible: boolean
-  fullscreen: boolean
-  borderless: boolean
-  resizable: boolean
-  title: string
-  cursor: CursorStyle
-  fit: FitStyle
-  left: number
-  top: number
-  width: number
-  height: number
-  page: number
-  background: string
-  readonly closed: boolean
+  readonly ctx: CanvasRenderingContext2D;
+  canvas: Canvas;
+  visible: boolean;
+  fullscreen: boolean;
+  borderless: boolean;
+  resizable: boolean;
+  title: string;
+  cursor: CursorStyle;
+  fit: FitStyle;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  page: number;
+  background: string;
+  readonly closed: boolean;
 
-  open(): void
-  close(): void
+  open(): void;
+  close(): void;
 }
 
 export interface App extends EventEmitter<{
-  "idle": [{type: "idle", target: App}]
-}>{
-  readonly windows: Window[]
-  readonly running: boolean
-  eventLoop: EventLoopMode
-  fps: number
+  idle: [{ type: "idle"; target: App }];
+}> {
+  readonly windows: Window[];
+  readonly running: boolean;
+  eventLoop: EventLoopMode;
+  fps: number;
 
-  launch(): Promise<undefined>
-  quit(): void
+  launch(): Promise<undefined>;
+  quit(): void;
 }
 
-export const App: App
+export const App: App;

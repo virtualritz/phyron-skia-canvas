@@ -153,7 +153,7 @@ impl MetalContext{
             false,
             None
         ).ok_or(
-            format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height())
+            format!("Could not allocate new {}×{} bitmap (color type: {:?})", image_info.width(), image_info.height(), image_info.color_type())
         )
     }
 

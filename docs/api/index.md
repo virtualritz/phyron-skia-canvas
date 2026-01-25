@@ -1,6 +1,7 @@
 ---
 id: api-intro
 ---
+
 # API Documentation
 
 :::info[Note]
@@ -8,23 +9,25 @@ Documentation for the key classes and their attributes are listed below—proper
 :::
 
 The library exports a number of classes emulating familiar browser objects including:
- - [Canvas][mdn_canvas] ⧸ [extensions][canvas] 🧪
- - [CanvasGradient][CanvasGradient]
- - [CanvasPattern][CanvasPattern]
- - [CanvasRenderingContext2D][CanvasRenderingContext2D] ⧸ [extensions][context] 🧪
- - [DOMMatrix][DOMMatrix]
- - [Image][Image] / [extensions][image] 🧪
- - [ImageData][ImageData] / [extensions][imagedata] 🧪
- - [Path2D][p2d_mdn] ⧸ [extensions][path2d] 🧪
+
+- [Canvas][mdn_canvas] ⧸ [extensions][canvas] 🧪
+- [CanvasGradient][CanvasGradient]
+- [CanvasPattern][CanvasPattern]
+- [CanvasRenderingContext2D][CanvasRenderingContext2D] ⧸ [extensions][context] 🧪
+- [DOMMatrix][DOMMatrix]
+- [Image][Image] / [extensions][image] 🧪
+- [ImageData][ImageData] / [extensions][imagedata] 🧪
+- [Path2D][p2d_mdn] ⧸ [extensions][path2d] 🧪
 
 In addition, the module contains:
+
 - [FontLibrary][fontlibrary] a global object for inspecting the system’s fonts and loading additional ones
 - [Window][window] a class allowing you to display your canvas interactively in an on-screen window
 - [App][app] a helper class for coordinating multiple windows in a single script
 - [loadImage()][loadimage] a utility function for loading `Image` objects asynchronously
 - [loadImageData()][loadimagedata] a utility function for loading `ImageData` objects asynchronously
 
-----
+---
 
 For detailed notes on the extensions Skia Canvas has made to standard object types, see the corresponding pages:
 
@@ -33,6 +36,7 @@ import DocCardList from '@theme/DocCardList';
 <DocCardList />
 
 <!-- references_begin -->
+
 [app]: app.md
 [canvas]: canvas.md
 [context]: context.md
@@ -51,4 +55,5 @@ import DocCardList from '@theme/DocCardList';
 [DOMMatrix]: https://developer.mozilla.org/en-US/docs/Web/API/DOMMatrix
 [Image]: https://developer.mozilla.org/en-US/docs/Web/API/Image
 [ImageData]: https://developer.mozilla.org/en-US/docs/Web/API/ImageData
+
 <!-- references_end -->

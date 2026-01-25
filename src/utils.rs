@@ -579,15 +579,49 @@ pub fn image_data_export_arg(cx: &mut FunctionContext, idx:usize) -> (ColorType,
 
 
 pub fn to_color_space(mode_name:&str) -> ColorSpace{
+  use skia_safe::{named_primaries, named_transfer_fn};
+
+  // CICP primaries
+  let p_p3 = named_primaries::CicpId::SMPTE_EG_432_1;   // Display P3
+  let p_2020 = named_primaries::CicpId::Rec2020;        // BT.2020
+
+  // CICP transfer functions
+  let t_srgb = named_transfer_fn::CicpId::IEC61966_2_1; // sRGB
+  let t_linear = named_transfer_fn::CicpId::Linear;     // Linear
+  let t_709 = named_transfer_fn::CicpId::Rec709;        // BT.709
+  let t_pq = named_transfer_fn::CicpId::PQ;             // PQ (HDR10)
+  let t_hlg = named_transfer_fn::CicpId::HLG;           // HLG
+
   match mode_name{
-    // TODO: add display-p3 support
+    "srgb-linear" | "linear" => ColorSpace::new_srgb_linear(),
+
+    // Display P3 (wide gamut, used by Apple devices)
+    "display-p3" | "p3" =>
+      ColorSpace::new_cicp(p_p3, t_srgb).unwrap_or_else(ColorSpace::new_srgb),
+    "display-p3-linear" | "p3-linear" =>
+      ColorSpace::new_cicp(p_p3, t_linear).unwrap_or_else(ColorSpace::new_srgb_linear),
+
+    // Rec. 2020 (wide gamut for UHD/HDR)
+    "rec2020" | "bt2020" =>
+      ColorSpace::new_cicp(p_2020, t_709).unwrap_or_else(ColorSpace::new_srgb),
+    "rec2020-linear" | "bt2020-linear" =>
+      ColorSpace::new_cicp(p_2020, t_linear).unwrap_or_else(ColorSpace::new_srgb_linear),
+
+    // HDR transfer functions with Rec.2020 gamut
+    "rec2020-pq" | "hdr10" =>
+      ColorSpace::new_cicp(p_2020, t_pq).unwrap_or_else(ColorSpace::new_srgb),
+    "rec2020-hlg" | "hlg" =>
+      ColorSpace::new_cicp(p_2020, t_hlg).unwrap_or_else(ColorSpace::new_srgb),
+
+    // Default: sRGB
     "srgb" | _ => ColorSpace::new_srgb()
   }
 }
 
-pub fn from_color_space(mode:ColorSpace) -> String{
-  match mode {
-    _ => "srgb"
+pub fn from_color_space(color_space:&ColorSpace) -> String{
+  match color_space.is_srgb() {
+    true => "srgb",
+    false => "srgb-linear" // linear or other non-sRGB spaces
   }.to_string()
 }
 

@@ -223,7 +223,7 @@ impl RecordingSurface{
       // only allocate a new surface if the dimensions (size * density) have changed or engine switched
       if recreate{
         let page_size = page.scaled_dimensions(opts.density);
-        let img_info = ImageInfo::new_n32_premul(page_size, opts.color_space.clone());
+        let img_info = ImageInfo::new(page_size, opts.color_type, AlphaType::Premul, opts.color_space.clone());
         self.surface = engine.make_surface(&img_info, &opts).ok();
       }
     }
@@ -314,10 +314,10 @@ impl Page{
       return Err("Width and height must be non-zero to generate an image".to_string())
     }
 
-    let ExportOptions{ ref format, quality, density, matte, color_type, .. } = options;
+    let ExportOptions{ ref format, quality, density, matte, color_type, ref color_space, .. } = options;
     let size = self.bounds.size();
     let img_dims = self.scaled_dimensions(density);
-    let img_info = ImageInfo::new_n32_premul(img_dims, Some(ColorSpace::new_srgb()));
+    let img_info = ImageInfo::new(img_dims, color_type, AlphaType::Premul, color_space.clone());
     let img_quality = ((quality*100.0) as u32).clamp(0, 100);
     let img_scale = Matrix::scale((density, density)).into();
 

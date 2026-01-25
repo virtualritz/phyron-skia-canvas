@@ -61,7 +61,7 @@ impl RenderingEngine{
         match self {
             Self::GPU => Engine::make_surface(image_info, opts),
             Self::CPU => surfaces::raster(image_info, None, Some(&opts.surface_props()))
-                .ok_or(format!("Could not allocate new {}×{} bitmap", image_info.width(), image_info.height()))
+                .ok_or(format!("Could not allocate new {}×{} bitmap (color type: {:?})", image_info.width(), image_info.height(), image_info.color_type()))
         }
     }
 

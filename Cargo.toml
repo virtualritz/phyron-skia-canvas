@@ -1,8 +1,8 @@
 [package]
-name = "skia-canvas"
-version = "3.0.8"
+name = "phyron-skia-canvas"
+version = "3.1.0"
 description = "A canvas environment for Node"
-authors = ["Christian Swinehart <drafting@samizdat.co>"]
+authors = ["Christian Swinehart <drafting@samizdat.co>", "Moritz Moeller <virtualritz@protonmail.com>"]
 license = "MIT"
 edition = "2021"
 exclude = ["index.node"]
