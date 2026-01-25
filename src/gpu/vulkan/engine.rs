@@ -1,26 +1,33 @@
-use std::{cell::RefCell, sync::{Arc, OnceLock}, time::{Instant, Duration}, ptr};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
+use skia_safe::{
+    ColorSpace, ColorType, ISize, ImageInfo, Surface,
+    gpu::{
+        Budgeted, DirectContext, SurfaceOrigin, direct_contexts, surfaces,
+        vk::{BackendContext, GetProcOf},
+    },
+};
+use std::{
+    cell::RefCell,
+    ptr,
+    sync::{Arc, OnceLock},
+    time::{Duration, Instant},
+};
 use vulkano::{
+    Handle, VulkanLibrary, VulkanObject,
     device::{
-        physical::{PhysicalDevice, PhysicalDeviceType},
         Device, DeviceCreateInfo, Queue, QueueCreateInfo, QueueFlags,
+        physical::{PhysicalDevice, PhysicalDeviceType},
     },
     instance::{Instance, InstanceCreateFlags, InstanceCreateInfo},
-    Handle, VulkanLibrary, VulkanObject,
-};
-use skia_safe::{
-    gpu::{
-        vk::{BackendContext, GetProcOf},
-        direct_contexts, surfaces, Budgeted, DirectContext, SurfaceOrigin
-    },
-    ColorSpace, ColorType, ISize, ImageInfo, Surface,
 };
 
 use crate::context::page::ExportOptions;
 
-thread_local!( static VK_CONTEXT: RefCell<Option<VulkanContext>> = const { RefCell::new(None) }; );
+thread_local!(
+    static VK_CONTEXT: RefCell<Option<VulkanContext>> = const { RefCell::new(None) };
+);
 static VK_STATUS: OnceLock<Value> = OnceLock::new();
-static VK_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
+static VK_CONTEXT_LIFESPAN: Duration = Duration::from_secs(5);
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -35,7 +42,7 @@ pub struct VulkanEngine {
 }
 
 impl VulkanEngine {
-    pub fn api() -> Option<String>{
+    pub fn api() -> Option<String> {
         Some("Vulkan".to_string())
     }
 
@@ -89,55 +96,56 @@ impl VulkanEngine {
         }).clone()
     }
 
-    fn spawn_idle_watcher(){
+    fn spawn_idle_watcher() {
         // use a non-rayon thread so as not to compete with the worker threads
-        std::thread::spawn(move || loop{
-            std::thread::sleep(Duration::from_secs(1));
-            rayon::spawn_broadcast(|_|{
-                // drop contexts that haven't been used in a while to free resources
-                VK_CONTEXT.with_borrow_mut(|cell| {
-                    cell.take_if(|engine|{
-                        engine.cleanup(); // it's unclear how effective this is
-                        engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_secs(1));
+                rayon::spawn_broadcast(|_| {
+                    // drop contexts that haven't been used in a while to free
+                    // resources
+                    VK_CONTEXT.with_borrow_mut(|cell| {
+                        cell.take_if(|engine| {
+                            engine.cleanup(); // it's unclear how effective this is
+                            engine.last_use.elapsed() > VK_CONTEXT_LIFESPAN
+                        });
                     });
                 });
-            });
+            }
         });
     }
 
-    pub fn with_context<T, F>(f:F) -> Result<T, String>
-        where F:FnOnce(&mut VulkanContext) -> Result<T, String>
+    pub fn with_context<T, F>(f: F) -> Result<T, String>
+    where
+        F: FnOnce(&mut VulkanContext) -> Result<T, String>,
     {
         match VulkanEngine::supported() {
             false => Err("Vulkan API not supported".to_string()),
-            true => VK_CONTEXT.with_borrow_mut(|local_ctx|{
+            true => VK_CONTEXT.with_borrow_mut(|local_ctx| {
                 local_ctx
                     // lazily initialize this thread's context...
                     .take()
-                    .or_else(|| VulkanContext::new().ok() )
+                    .or_else(|| VulkanContext::new().ok())
                     .ok_or("Vulkan initialization failed".to_string())
-                    .and_then(|ctx|{
-                        f(local_ctx.insert(ctx))
-                    })
-            })
+                    .and_then(|ctx| f(local_ctx.insert(ctx)))
+            }),
         }
     }
 
-    pub fn with_direct_context<F>(f:F)
-        where F:FnOnce(Option<&mut DirectContext>)
+    pub fn with_direct_context<F>(f: F)
+    where
+        F: FnOnce(Option<&mut DirectContext>),
     {
-        Self::with_context(|ctx| Ok(f(Some(&mut ctx.context))) ).ok();
+        Self::with_context(|ctx| Ok(f(Some(&mut ctx.context)))).ok();
     }
 
-
-    pub fn make_surface(image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
-        Self::with_context(|ctx| ctx.surface(image_info, opts) )
+    pub fn make_surface(image_info: &ImageInfo, opts: &ExportOptions) -> Result<Surface, String> {
+        Self::with_context(|ctx| ctx.surface(image_info, opts))
     }
 }
 
-
 #[allow(dead_code)]
-pub struct VulkanContext{
+pub struct VulkanContext {
     context: DirectContext,
     library: Arc<VulkanLibrary>,
     instance: Arc<Instance>,
@@ -148,7 +156,7 @@ pub struct VulkanContext{
     last_use: Instant,
 }
 
-impl VulkanContext{
+impl VulkanContext {
     fn new() -> Result<Self, String> {
         let library = VulkanLibrary::new().or(Err("Vulkan libraries not found on system"))?;
 
@@ -193,7 +201,9 @@ impl VulkanContext{
         )
         .or(Err("Failed to create Vulkan device"))?;
 
-        let queue = queues.next().ok_or("Failed to create Vulkan graphics queue")?;
+        let queue = queues
+            .next()
+            .ok_or("Failed to create Vulkan graphics queue")?;
 
         let context = {
             let get_proc = |of| unsafe {
@@ -210,7 +220,10 @@ impl VulkanContext{
                 }
                 .map(|f| f as _)
                 .unwrap_or_else(|| {
-                    println!("Failed to resolve Vulkan proc `{}`", of.name().to_str().unwrap());
+                    println!(
+                        "Failed to resolve Vulkan proc `{}`",
+                        of.name().to_str().unwrap()
+                    );
                     ptr::null()
                 })
             };
@@ -240,14 +253,17 @@ impl VulkanContext{
             device,
             queue,
             vk_sample_counts,
-            last_use: Instant::now() + VK_CONTEXT_LIFESPAN
+            last_use: Instant::now() + VK_CONTEXT_LIFESPAN,
         })
     }
 
     /// Compute valid MSAA sample counts for a given color type
     fn msaa_for_color_type(&self, color_type: ColorType) -> Vec<usize> {
-        let max_sample_count = self.context.max_surface_sample_count_for_color_type(color_type);
-        let mut msaa: Vec<usize> = [1,2,4,8,16,32].into_iter()
+        let max_sample_count = self
+            .context
+            .max_surface_sample_count_for_color_type(color_type);
+        let mut msaa: Vec<usize> = [1, 2, 4, 8, 16, 32]
+            .into_iter()
             .filter(|s| s <= &max_sample_count)
             .filter_map(|s| vulkano::image::SampleCount::try_from(s as u32).ok())
             .filter(|s| self.vk_sample_counts.contains_enum(*s))
@@ -257,14 +273,19 @@ impl VulkanContext{
         msaa
     }
 
-    pub fn works(&mut self) -> bool{
-        self.surface(&ImageInfo::new_n32_premul(
-            ISize::new(100, 100),
-            Some(ColorSpace::new_srgb()),
-        ), &ExportOptions::default()).is_ok()
+    pub fn works(&mut self) -> bool {
+        self.surface(
+            &ImageInfo::new_n32_premul(ISize::new(100, 100), Some(ColorSpace::new_srgb())),
+            &ExportOptions::default(),
+        )
+        .is_ok()
     }
 
-    pub fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String> {
+    pub fn surface(
+        &mut self,
+        image_info: &ImageInfo,
+        opts: &ExportOptions,
+    ) -> Result<Surface, String> {
         self.last_use = Instant::now();
         let msaa = self.msaa_for_color_type(image_info.color_type());
         surfaces::render_target(
@@ -276,13 +297,18 @@ impl VulkanContext{
             Some(&opts.surface_props()),
             false,
             None,
-        ).ok_or(
-            format!("Could not allocate new {}×{} bitmap (color type: {:?})", image_info.width(), image_info.height(), image_info.color_type())
         )
+        .ok_or(format!(
+            "Could not allocate new {}×{} bitmap (color type: {:?})",
+            image_info.width(),
+            image_info.height(),
+            image_info.color_type()
+        ))
     }
 
-    fn cleanup(&mut self){
+    fn cleanup(&mut self) {
         self.context.free_gpu_resources();
-        self.context.perform_deferred_cleanup(Duration::from_secs(1), None);
+        self.context
+            .perform_deferred_cleanup(Duration::from_secs(1), None);
     }
 }

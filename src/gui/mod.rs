@@ -3,9 +3,7 @@
 #![allow(dead_code)]
 use neon::prelude::*;
 
-use crate::utils::*;
-use crate::context::BoxedContext2D;
-use crate::gpu::RenderingEngine;
+use crate::{context::BoxedContext2D, gpu::RenderingEngine, utils::*};
 
 pub mod app;
 use app::{App, LoopMode};
@@ -17,9 +15,9 @@ pub mod event;
 
 pub mod window_mgr;
 
-fn validate_gpu(cx:&mut FunctionContext) -> NeonResult<()>{
+fn validate_gpu(cx: &mut FunctionContext) -> NeonResult<()> {
     // bail out if we can't draw to the screen
-    if let Some(reason) = RenderingEngine::default().lacks_gpu_support(){
+    if let Some(reason) = RenderingEngine::default().lacks_gpu_support() {
         cx.throw_error(reason)?
     }
     Ok(())
@@ -30,7 +28,6 @@ pub fn register(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     App::register(callback);
     Ok(cx.undefined())
 }
-
 
 pub fn activate(mut cx: FunctionContext) -> JsResult<JsPromise> {
     validate_gpu(&mut cx)?;
@@ -51,10 +48,10 @@ pub fn set_rate(mut cx: FunctionContext) -> JsResult<JsNumber> {
 
 pub fn set_mode(mut cx: FunctionContext) -> JsResult<JsString> {
     let mode = string_arg(&mut cx, 1, "eventLoopMode")?;
-    let loop_mode = match mode.as_str(){
+    let loop_mode = match mode.as_str() {
         "node" => Ok(LoopMode::Node),
         "native" => Ok(LoopMode::Native),
-        _ => cx.throw_error(format!("Invalid event loop mode: {}", mode))
+        _ => cx.throw_error(format!("Invalid event loop mode: {}", mode)),
     }?;
 
     App::set_mode(loop_mode);

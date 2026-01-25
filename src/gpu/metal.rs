@@ -1,22 +1,30 @@
 #![allow(unexpected_cfgs)]
-use std::cell::RefCell;
-use std::sync::{Arc, OnceLock};
-use std::time::{Instant, Duration};
 use metal::{
+    CommandQueue, Device, MTLDeviceLocation, MTLPixelFormat, MetalLayer,
     foreign_types::{ForeignType, ForeignTypeRef},
-    CommandQueue, Device, MTLPixelFormat, MetalLayer, MTLDeviceLocation,
-};
-use skia_safe::{scalar, ImageInfo, ColorType, Size, Surface, Image};
-use skia_safe::gpu::{
-    mtl, direct_contexts, backend_render_targets, surfaces, Budgeted, DirectContext, SurfaceOrigin
 };
 use objc::rc::autoreleasepool;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
+use skia_safe::{
+    ColorType, Image, ImageInfo, Size, Surface,
+    gpu::{
+        Budgeted, DirectContext, SurfaceOrigin, backend_render_targets, direct_contexts, mtl,
+        surfaces,
+    },
+    scalar,
+};
+use std::{
+    cell::RefCell,
+    sync::{Arc, OnceLock},
+    time::{Duration, Instant},
+};
 
 use crate::context::page::ExportOptions;
 
-thread_local!( static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) }; );
-static MTL_CONTEXT_LIFESPAN:Duration = Duration::from_secs(5);
+thread_local!(
+    static MTL_CONTEXT: RefCell<Option<MetalContext>> = const { RefCell::new(None) };
+);
+static MTL_CONTEXT_LIFESPAN: Duration = Duration::from_secs(5);
 static MTL_STATUS: OnceLock<Value> = OnceLock::new();
 
 //
@@ -25,7 +33,7 @@ static MTL_STATUS: OnceLock<Value> = OnceLock::new();
 pub struct MetalEngine {}
 
 impl MetalEngine {
-    pub fn api() -> Option<String>{
+    pub fn api() -> Option<String> {
         Some("Metal".to_string())
     }
 
@@ -34,60 +42,71 @@ impl MetalEngine {
     }
 
     pub fn status() -> Value {
-        MTL_STATUS.get_or_init(||{
-            // test whether a context can be created and do some one-time init if so
-            match MetalContext::new(){
-                Some(context) => {
-                    Self::spawn_idle_watcher(); // watch for inactive contexts and deallocate them
+        MTL_STATUS
+            .get_or_init(|| {
+                // test whether a context can be created and do some one-time
+                // init if so
+                match MetalContext::new() {
+                    Some(context) => {
+                        Self::spawn_idle_watcher(); // watch for inactive contexts and deallocate them
 
-                    let device_name = format!("{} ({})", match context.device.location(){
-                        MTLDeviceLocation::BuiltIn => "Integrated GPU",
-                        MTLDeviceLocation::Slot => "Discrete GPU",
-                        MTLDeviceLocation::External => "External GPU",
-                        _ => "Other GPU"
-                    }, context.device.name());
+                        let device_name = format!(
+                            "{} ({})",
+                            match context.device.location() {
+                                MTLDeviceLocation::BuiltIn => "Integrated GPU",
+                                MTLDeviceLocation::Slot => "Discrete GPU",
+                                MTLDeviceLocation::External => "External GPU",
+                                _ => "Other GPU",
+                            },
+                            context.device.name()
+                        );
 
-                    json!({
-                        "renderer": "GPU",
+                        json!({
+                            "renderer": "GPU",
+                            "api": "Metal",
+                            "device": device_name,
+                            "threads": rayon::current_num_threads(),
+                        })
+                    }
+                    None => json!({
+                        "renderer": "CPU",
                         "api": "Metal",
-                        "device": device_name,
+                        "device": "CPU-based renderer (Fallback)",
                         "threads": rayon::current_num_threads(),
-                    })
+                        "error": "GPU initialization failed",
+                    }),
                 }
-                None => json!({
-                    "renderer": "CPU",
-                    "api": "Metal",
-                    "device": "CPU-based renderer (Fallback)",
-                    "threads": rayon::current_num_threads(),
-                    "error": "GPU initialization failed",
-                })
-            }
-        }).clone()
+            })
+            .clone()
     }
 
-    fn spawn_idle_watcher(){
+    fn spawn_idle_watcher() {
         // use a non-rayon thread so as not to compete with the worker threads
-        std::thread::spawn(move || loop{
-            // run forever, watching the other threads in the pool
-            std::thread::sleep(Duration::from_secs(1));
-            rayon::spawn_broadcast(|_|{
-                // drop contexts that haven't been used in a while to free resources
-                MTL_CONTEXT.with_borrow_mut(|cell| {
-                    cell.take_if(|engine|{
-                        engine.cleanup(); // it's unclear how effective this is...
-                        engine.last_use.elapsed() > MTL_CONTEXT_LIFESPAN
+        std::thread::spawn(move || {
+            loop {
+                // run forever, watching the other threads in the pool
+                std::thread::sleep(Duration::from_secs(1));
+                rayon::spawn_broadcast(|_| {
+                    // drop contexts that haven't been used in a while to free
+                    // resources
+                    MTL_CONTEXT.with_borrow_mut(|cell| {
+                        cell.take_if(|engine| {
+                            engine.cleanup(); // it's unclear how effective this is...
+                            engine.last_use.elapsed() > MTL_CONTEXT_LIFESPAN
+                        });
                     });
                 });
-            });
+            }
         });
     }
 
-    pub fn with_context<T, F>(f:F) -> Result<T, String>
-        where F:FnOnce(&mut MetalContext) -> Result<T, String>
+    pub fn with_context<T, F>(f: F) -> Result<T, String>
+    where
+        F: FnOnce(&mut MetalContext) -> Result<T, String>,
     {
         match MetalEngine::supported() {
             false => Err("Metal API not supported".to_string()),
-            true => MTL_CONTEXT.with_borrow_mut(|local_ctx|
+            true => MTL_CONTEXT.with_borrow_mut(|local_ctx| {
                 autoreleasepool(||
                     // lazily initialize this thread's context...
                     local_ctx
@@ -96,20 +115,20 @@ impl MetalEngine {
                         .ok_or("Metal initialization failed".to_string())
                         .and_then(|ctx|{
                             f(local_ctx.insert(ctx))
-                        })
-                )
-            )
+                        }))
+            }),
         }
     }
 
-    pub fn with_direct_context<F>(f:F)
-        where F:FnOnce(Option<&mut DirectContext>)
+    pub fn with_direct_context<F>(f: F)
+    where
+        F: FnOnce(Option<&mut DirectContext>),
     {
-        Self::with_context(|ctx| Ok(f(Some(&mut ctx.context))) ).ok();
+        Self::with_context(|ctx| Ok(f(Some(&mut ctx.context)))).ok();
     }
 
-    pub fn make_surface(image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
-        Self::with_context(|ctx| ctx.surface(image_info, opts) )
+    pub fn make_surface(image_info: &ImageInfo, opts: &ExportOptions) -> Result<Surface, String> {
+        Self::with_context(|ctx| ctx.surface(image_info, opts))
     }
 }
 
@@ -120,10 +139,10 @@ pub struct MetalContext {
     last_use: Instant,
 }
 
-impl MetalContext{
-    fn new() -> Option<Self>{
+impl MetalContext {
+    fn new() -> Option<Self> {
         autoreleasepool(|| {
-            Device::system_default().and_then(|device|{
+            Device::system_default().and_then(|device| {
                 let queue = device.new_command_queue();
                 let backend = unsafe {
                     mtl::BackendContext::new(
@@ -132,16 +151,21 @@ impl MetalContext{
                     )
                 };
                 let last_use = Instant::now() + MTL_CONTEXT_LIFESPAN;
-                let msaa:Vec<usize> = [0,2,4,8,16,32].into_iter().filter(|s|{
-                    *s==0 || device.supports_texture_sample_count(*s as _)
-                }).collect();
-                direct_contexts::make_metal(&backend, None)
-                    .map(|context| MetalContext{device, context, msaa, last_use})
+                let msaa: Vec<usize> = [0, 2, 4, 8, 16, 32]
+                    .into_iter()
+                    .filter(|s| *s == 0 || device.supports_texture_sample_count(*s as _))
+                    .collect();
+                direct_contexts::make_metal(&backend, None).map(|context| MetalContext {
+                    device,
+                    context,
+                    msaa,
+                    last_use,
+                })
             })
         })
     }
 
-    fn surface(&mut self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String> {
+    fn surface(&mut self, image_info: &ImageInfo, opts: &ExportOptions) -> Result<Surface, String> {
         self.last_use = self.last_use.max(Instant::now());
         surfaces::render_target(
             &mut self.context,
@@ -151,15 +175,20 @@ impl MetalContext{
             SurfaceOrigin::BottomLeft,
             Some(&opts.surface_props()),
             false,
-            None
-        ).ok_or(
-            format!("Could not allocate new {}×{} bitmap (color type: {:?})", image_info.width(), image_info.height(), image_info.color_type())
+            None,
         )
+        .ok_or(format!(
+            "Could not allocate new {}×{} bitmap (color type: {:?})",
+            image_info.width(),
+            image_info.height(),
+            image_info.color_type()
+        ))
     }
 
-    fn cleanup(&mut self){
+    fn cleanup(&mut self) {
         self.context.free_gpu_resources();
-        self.context.perform_deferred_cleanup(Duration::from_secs(1), None);
+        self.context
+            .perform_deferred_cleanup(Duration::from_secs(1), None);
     }
 }
 
@@ -169,18 +198,22 @@ impl MetalContext{
 
 #[cfg(feature = "window")]
 use {
-    skia_safe::{Matrix, Color, Paint, SurfaceProps, canvas::SrcRectConstraint},
-    raw_window_metal::Layer,
+    super::{RenderCache, RenderState::Resizing},
+    crate::context::page::Page,
     core_graphics_types::geometry::CGSize,
-    objc::{msg_send, sel, sel_impl, runtime::{self, Object}},
+    objc::{
+        msg_send,
+        runtime::{self, Object},
+        sel, sel_impl,
+    },
+    raw_window_metal::Layer,
+    skia_safe::{Color, Matrix, Paint, SurfaceProps, canvas::SrcRectConstraint},
     winit::{
         dpi::PhysicalSize,
-        window::Window,
-        raw_window_handle::{RawWindowHandle, HasWindowHandle},
         event_loop::ActiveEventLoop,
+        raw_window_handle::{HasWindowHandle, RawWindowHandle},
+        window::Window,
     },
-    crate::context::page::Page,
-    super::{RenderCache, RenderState::Resizing},
 };
 
 #[allow(non_upper_case_globals)]
@@ -199,8 +232,8 @@ pub struct MetalRenderer {
 }
 
 #[cfg(feature = "window")]
-impl MetalRenderer{
-    pub fn for_window(_event_loop: &ActiveEventLoop, window:Arc<Window>) -> Self {
+impl MetalRenderer {
+    pub fn for_window(_event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
         let device = Device::system_default().expect("Metal device not found");
 
         let raw_window = window
@@ -214,7 +247,7 @@ impl MetalRenderer{
             _ => panic!("Unsupported window handle type"),
         };
 
-        let layer = unsafe{
+        let layer = unsafe {
             let mtl_layer = MetalLayer::from_ptr(raw_layer.into_raw().as_ptr().cast());
             let gravity = match msg_send![mtl_layer.as_ptr(), contentsAreFlipped] {
                 runtime::YES => kCAGravityBottomLeft,
@@ -236,7 +269,12 @@ impl MetalRenderer{
         let backend = MetalBackend::for_layer(&layer);
         let cache = RenderCache::default();
 
-        Self{window, layer, backend, cache}
+        Self {
+            window,
+            layer,
+            backend,
+            cache,
+        }
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
@@ -245,27 +283,35 @@ impl MetalRenderer{
         self.cache.state = Resizing;
     }
 
-    pub fn draw(&mut self, page:Page, matrix:Matrix, props:SurfaceProps, matte:Color){
+    pub fn draw(&mut self, page: Page, matrix: Matrix, props: SurfaceProps, matte: Color) {
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
         let sync = self.cache.state == Resizing;
 
-        let frame = self.backend.render_to_layer(&self.layer, &self.window, sync, &props, |canvas| {
-            // draw background (either use raster cache or set to window’s background color)
-            canvas.clear(Color::TRANSPARENT);
-            if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip){
-                canvas.draw_image_rect(image, Some((src, SrcRectConstraint::Strict)), dst, &Paint::default());
-            }else{
-                canvas.clear(matte);
-            }
+        let frame = self
+            .backend
+            .render_to_layer(&self.layer, &self.window, sync, &props, |canvas| {
+                // draw background (either use raster cache or set to
+                // window’s background color)
+                canvas.clear(Color::TRANSPARENT);
+                if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip) {
+                    canvas.draw_image_rect(
+                        image,
+                        Some((src, SrcRectConstraint::Strict)),
+                        dst,
+                        &Paint::default(),
+                    );
+                } else {
+                    canvas.clear(matte);
+                }
 
-            // draw newly added vector layers
-            canvas.scale((dpr, dpr))
-                .clip_rect(clip, None, Some(true));
-            for pict in page.layers.iter().skip(self.cache.depth()){
-                canvas.draw_picture(pict, Some(&matrix), None);
-            }
-        }).unwrap();
+                // draw newly added vector layers
+                canvas.scale((dpr, dpr)).clip_rect(clip, None, Some(true));
+                for pict in page.layers.iter().skip(self.cache.depth()) {
+                    canvas.draw_picture(pict, Some(&matrix), None);
+                }
+            })
+            .unwrap();
 
         // cache frame contents for use as background of next render pass
         self.cache.update(frame, &page, matte, dpr, clip);
@@ -277,14 +323,14 @@ pub struct MetalBackend {
     queue: CommandQueue,
 }
 
-impl Drop for MetalBackend{
+impl Drop for MetalBackend {
     fn drop(&mut self) {
         self.skia_ctx.abandon();
     }
 }
 
 impl MetalBackend {
-    pub fn for_layer(layer:&MetalLayer) -> Self{
+    pub fn for_layer(layer: &MetalLayer) -> Self {
         let queue = layer.device().new_command_queue();
         let backend_ctx = unsafe {
             mtl::BackendContext::new(
@@ -296,8 +342,16 @@ impl MetalBackend {
         Self { skia_ctx, queue }
     }
 
-    fn render_to_layer<F>(&mut self, layer:&MetalLayer, window:&Window, sync:bool, props:&SurfaceProps, f:F) -> Result<Image, String>
-        where F:FnOnce(&skia_safe::Canvas)
+    fn render_to_layer<F>(
+        &mut self,
+        layer: &MetalLayer,
+        window: &Window,
+        sync: bool,
+        props: &SurfaceProps,
+        f: F,
+    ) -> Result<Image, String>
+    where
+        F: FnOnce(&skia_safe::Canvas),
     {
         let drawable = layer
             .next_drawable()
@@ -309,8 +363,7 @@ impl MetalBackend {
         };
 
         let backend_render_target = unsafe {
-            let texture_info =
-                mtl::TextureInfo::new(drawable.texture().as_ptr() as mtl::Handle);
+            let texture_info = mtl::TextureInfo::new(drawable.texture().as_ptr() as mtl::Handle);
             backend_render_targets::make_mtl(
                 (drawable_size.width as i32, drawable_size.height as i32),
                 &texture_info,
@@ -324,7 +377,8 @@ impl MetalBackend {
             ColorType::BGRA8888,
             None,
             Some(props),
-        ).ok_or("MetalBackend: could not create render target")?;
+        )
+        .ok_or("MetalBackend: could not create render target")?;
 
         // pass the suface's canvas to the user-provided callback
         f(surface.canvas());
@@ -338,9 +392,10 @@ impl MetalBackend {
         command_buffer.commit();
 
         // during resizes, ensure drawing is complete before returning
-        if sync{ command_buffer.wait_until_completed(); }
+        if sync {
+            command_buffer.wait_until_completed();
+        }
 
         Ok(surface.image_snapshot())
     }
-
 }

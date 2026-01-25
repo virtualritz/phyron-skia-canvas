@@ -1,7 +1,7 @@
 #![allow(clippy::upper_case_acronyms)]
-use skia_safe::{gpu::DirectContext, ImageInfo, Image, Rect, Matrix, Color, Surface, surfaces};
-use serde_json::{json, Value};
-use crate::context::page::{Page, ExportOptions};
+use crate::context::page::{ExportOptions, Page};
+use serde_json::{Value, json};
+use skia_safe::{Color, Image, ImageInfo, Matrix, Rect, Surface, gpu::DirectContext, surfaces};
 
 #[cfg(feature = "metal")]
 mod metal;
@@ -9,7 +9,6 @@ mod metal;
 use crate::gpu::metal::MetalEngine as Engine;
 #[cfg(all(feature = "metal", feature = "window"))]
 pub use crate::gpu::metal::MetalRenderer as Renderer;
-
 
 #[cfg(feature = "vulkan")]
 mod vulkan;
@@ -19,61 +18,90 @@ use crate::gpu::vulkan::engine::VulkanEngine as Engine;
 pub use crate::gpu::vulkan::renderer::VulkanRenderer as Renderer;
 
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
-struct Engine { }
+struct Engine {}
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 impl Engine {
-    pub fn api() -> Option<String>{ None }
-    pub fn supported() -> bool { false }
-    pub fn status() -> Value { serde_json::json!({
-        "renderer": "CPU",
-        "api": Value::Null,
-        "device": "CPU-based renderer (compiled without GPU support)",
-        "error": Value::Null,
-    })}
-    // placeholders that match the GPU signatures (for the type-checker) but will never be called
-    // (see the RenderingEngine methods for their inline implementation when in CPU mode)
-    pub fn make_surface(_info: &ImageInfo, _opts:&ExportOptions) -> Result<Surface, String>{ panic!() }
-    pub fn with_direct_context(_f:impl FnOnce(Option<&mut DirectContext>)){ panic!() }
+    pub fn api() -> Option<String> {
+        None
+    }
+
+    pub fn supported() -> bool {
+        false
+    }
+
+    pub fn status() -> Value {
+        serde_json::json!({
+            "renderer": "CPU",
+            "api": Value::Null,
+            "device": "CPU-based renderer (compiled without GPU support)",
+            "error": Value::Null,
+        })
+    }
+
+    // placeholders that match the GPU signatures (for the type-checker) but
+    // will never be called (see the RenderingEngine methods for their
+    // inline implementation when in CPU mode)
+    pub fn make_surface(_info: &ImageInfo, _opts: &ExportOptions) -> Result<Surface, String> {
+        panic!()
+    }
+
+    pub fn with_direct_context(_f: impl FnOnce(Option<&mut DirectContext>)) {
+        panic!()
+    }
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum RenderingEngine{
+pub enum RenderingEngine {
     CPU,
     GPU,
 }
 
 impl Default for RenderingEngine {
     fn default() -> Self {
-        if Engine::supported() { Self::GPU } else { Self::CPU }
+        if Engine::supported() {
+            Self::GPU
+        } else {
+            Self::CPU
+        }
     }
 }
 
 #[allow(dead_code)]
-impl RenderingEngine{
+impl RenderingEngine {
     pub fn selectable(&self) -> bool {
         match self {
             Self::GPU => Engine::supported(),
-            Self::CPU => true
+            Self::CPU => true,
         }
     }
 
-    pub fn make_surface(&self, image_info: &ImageInfo, opts:&ExportOptions) -> Result<Surface, String>{
+    pub fn make_surface(
+        &self,
+        image_info: &ImageInfo,
+        opts: &ExportOptions,
+    ) -> Result<Surface, String> {
         match self {
             Self::GPU => Engine::make_surface(image_info, opts),
-            Self::CPU => surfaces::raster(image_info, None, Some(&opts.surface_props()))
-                .ok_or(format!("Could not allocate new {}×{} bitmap (color type: {:?})", image_info.width(), image_info.height(), image_info.color_type()))
+            Self::CPU => {
+                surfaces::raster(image_info, None, Some(&opts.surface_props())).ok_or(format!(
+                    "Could not allocate new {}×{} bitmap (color type: {:?})",
+                    image_info.width(),
+                    image_info.height(),
+                    image_info.color_type()
+                ))
+            }
         }
     }
 
-    pub fn with_direct_context(&self, f:impl FnOnce(Option<&mut DirectContext>)){
+    pub fn with_direct_context(&self, f: impl FnOnce(Option<&mut DirectContext>)) {
         match self {
             Self::GPU => Engine::with_direct_context(f),
-            Self::CPU => f(None)
+            Self::CPU => f(None),
         }
     }
 
-    pub fn status(&self, is_manually_disabled:bool) -> serde_json::Value {
-        match is_manually_disabled{
+    pub fn status(&self, is_manually_disabled: bool) -> serde_json::Value {
+        match is_manually_disabled {
             true => json!({
                 "renderer":"CPU",
                 "api": Engine::api(),
@@ -81,16 +109,16 @@ impl RenderingEngine{
                 "driver": "N/A",
                 "threads": rayon::current_num_threads()
             }),
-            false=> Engine::status(),
+            false => Engine::status(),
         }
     }
 
     pub fn lacks_gpu_support(&self) -> Option<String> {
-        match Engine::supported(){
+        match Engine::supported() {
             true => None,
             false => {
                 let mut msg = vec!["No windowing support".to_string()];
-                if let Some(Value::String(error)) = Engine::status().get("error"){
+                if let Some(Value::String(error)) = Engine::status().get("error") {
                     msg.push(error.to_string());
                 }
                 Some(msg.join(": "))
@@ -100,7 +128,8 @@ impl RenderingEngine{
 }
 
 /// Get the default backend status without creating a canvas.
-/// Returns JSON with renderer (CPU/GPU), api, device, driver, threads, and error fields.
+/// Returns JSON with renderer (CPU/GPU), api, device, driver, threads, and
+/// error fields.
 pub fn get_backend_status() -> serde_json::Value {
     let mut status = Engine::status();
     // Add thread count for CPU info.
@@ -121,20 +150,32 @@ pub struct RenderCache {
     state: RenderState,
 }
 
-impl Default for RenderCache{
+impl Default for RenderCache {
     fn default() -> Self {
-        Self{image:None, content:Rect::new_empty(), page:Page::default(), dpr:0.0, matte:Color::TRANSPARENT, state:RenderState::Clean}
+        Self {
+            image: None,
+            content: Rect::new_empty(),
+            page: Page::default(),
+            dpr: 0.0,
+            matte: Color::TRANSPARENT,
+            state: RenderState::Clean,
+        }
     }
 }
 
 #[allow(dead_code)]
-impl RenderCache{
-    pub fn validate(&mut self, page:&Page, matte:Color, dpr:f32, clip:Rect) -> Option<(&Image, &Rect, Rect)>{
-        if
-            self.state == RenderState::Dirty ||
-            self.page.id != page.id ||
-            self.matte != matte ||
-            self.dpr != dpr
+impl RenderCache {
+    pub fn validate(
+        &mut self,
+        page: &Page,
+        matte: Color,
+        dpr: f32,
+        clip: Rect,
+    ) -> Option<(&Image, &Rect, Rect)> {
+        if self.state == RenderState::Dirty
+            || self.page.id != page.id
+            || self.matte != matte
+            || self.dpr != dpr
         {
             *self = Self::default();
         }
@@ -149,21 +190,29 @@ impl RenderCache{
         self.page.layers.len()
     }
 
-    pub fn update(&mut self, image:Image, page:&Page, matte:Color, dpr:f32, content:Rect){
-        if self.state==RenderState::Resizing{
-            // mark the framebuffer as needing a full redraw and skip updating cached image during resize
+    pub fn update(&mut self, image: Image, page: &Page, matte: Color, dpr: f32, content: Rect) {
+        if self.state == RenderState::Resizing {
+            // mark the framebuffer as needing a full redraw and skip updating
+            // cached image during resize
             self.state = RenderState::Dirty;
-        }else{
+        } else {
             let state = RenderState::Clean;
             let (content, _) = skia_safe::Matrix::scale((dpr, dpr)).map_rect(content);
-            *self = Self{image: Some(image), page:page.clone(), matte, dpr, content, state};
+            *self = Self {
+                image: Some(image),
+                page: page.clone(),
+                matte,
+                dpr,
+                content,
+                state,
+            };
         }
     }
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-pub enum RenderState{
+pub enum RenderState {
     Clean,
     Dirty,
-    Resizing
+    Resizing,
 }
