@@ -4,18 +4,21 @@ on:
   release:
     types: [released]
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   publish:
     name: Publish to NPM
     runs-on: ubuntu-latest
-    environment: npm
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Use Node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           registry-url: "https://registry.npmjs.org"
@@ -29,6 +32,4 @@ jobs:
           npm pkg get prebuild
 
       - name: Publish to NPM
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish
+        run: npm publish --provenance --access public
