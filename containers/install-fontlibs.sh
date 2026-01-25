@@ -24,6 +24,6 @@ FONTCONFIG=fontconfig-$FONTCONFIG_VERSION
 FONTCONFIG_URL=https://gitlab.freedesktop.org/api/v4/projects/890/packages/generic/fontconfig/$FONTCONFIG_VERSION/${FONTCONFIG}.tar.xz
 curl -sL $FONTCONFIG_URL | tar xJf - -C /opt
 cd /opt/${FONTCONFIG} && \
-    meson setup -Dprefix=/ -Dsysconfdir=/etc -Dlocalstatedir=/var -Ddefault_library=static -Dprefer_static=true -Dxml-backend=expat -Dtests=disabled build && \
+    meson setup -Dprefix=/ -Dsysconfdir=/etc -Dlocalstatedir=/var -Ddefault_library=static -Dprefer_static=true -Dxml-backend=expat -Dtests=disabled -Dtools=disabled build && \
     meson compile -C build && \
     meson install --destdir=/usr/local -C build
