@@ -444,6 +444,29 @@ export interface EngineDetails {
   error?: string;
 }
 
+export interface BackendInfo {
+  /** Whether GPU or CPU renderer is being used. */
+  renderer: "CPU" | "GPU";
+  /** Graphics API used (Vulkan, Metal, or null for CPU). */
+  api: "Vulkan" | "Metal" | null;
+  /** Description of the rendering device. */
+  device: string;
+  /** Driver version (GPU only). */
+  driver?: string;
+  /** Number of CPU threads available for rendering. */
+  threads: number;
+  /** Whether GPU rendering is available. */
+  gpuAvailable: boolean;
+  /** Error message if GPU initialization failed. */
+  error?: string;
+}
+
+/**
+ * Get backend information without creating a canvas.
+ * Useful for determining optimal color type (F16 for GPU, F32 for CPU).
+ */
+export function backend(): BackendInfo;
+
 export interface TextOptions {
   /** Amount of additional contrast to add when rendering text (defaults to 0) */
   textContrast?: number;

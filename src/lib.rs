@@ -19,6 +19,13 @@ mod gui;
 
 use context::api as ctx;
 
+/// Module-level function to get backend status without creating a canvas.
+/// Returns JSON string with renderer, api, device, driver, threads, and gpuAvailable fields.
+fn backend(mut cx: FunctionContext) -> JsResult<JsString> {
+    let status = gpu::get_backend_status();
+    Ok(cx.string(status.to_string()))
+}
+
 #[neon::main]
 fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
@@ -100,6 +107,10 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
   cx.export_function("FontLibrary_family", font_library::family)?;
   cx.export_function("FontLibrary_addFamily", font_library::addFamily)?;
   cx.export_function("FontLibrary_reset", font_library::reset)?;
+
+  // -- Backend (module-level) --------------------------------------------------------------------
+
+  cx.export_function("backend", backend)?;
 
   // -- Canvas ------------------------------------------------------------------------------------
 
