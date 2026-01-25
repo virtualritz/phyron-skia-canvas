@@ -137,4 +137,4 @@ jobs:
              cp $SRC_DIR/lib/skia.node ./node_modules/skia-canvas/lib
           cd $LAYER_DIR && \
              zip -r9 $LAYER_ZIP nodejs/node_modules
-          gh release -R samizdatco/skia-canvas upload $PKG_VERSION $LAYER_ZIP
+          gh release -R phyrondev/phyron-skia-canvas upload $PKG_VERSION $LAYER_ZIP
