@@ -1,16 +1,16 @@
 {
   "name": "phyron-skia-canvas",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "A multi-threaded, GPU-accelerated, Canvas API for Node",
   "author": "Christian Swinehart <drafting@samizdat.co>",
   "license": "MIT",
   "homepage": "https://skia-canvas.org",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/samizdatco/skia-canvas.git"
+    "url": "git+https://github.com/phyrondev/phyron-skia-canvas.git"
   },
   "bugs": {
-    "url": "https://github.com/samizdatco/skia-canvas/issues"
+    "url": "https://github.com/phyrondev/phyron-skia-canvas/issues"
   },
   "main": "./lib/index.js",
   "exports": {
@@ -64,5 +64,6 @@
     "pdf",
     "svg",
     "rust"
-  ]
+  ],
+  "prebuild": {}
 }
