@@ -38,7 +38,8 @@ impl VulkanRenderer {
     pub fn for_window(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
         let instance = {
             let library = VulkanLibrary::new().expect("Vulkan libraries not found on system");
-            let required_extensions = Surface::required_extensions(event_loop);
+            let required_extensions = Surface::required_extensions(event_loop)
+                .expect("Failed to get required Vulkan extensions");
 
             Instance::new(
                 library,

@@ -218,7 +218,7 @@ use {
 
 #[allow(non_upper_case_globals)]
 #[link(name = "QuartzCore", kind = "framework")]
-extern "C" {
+unsafe extern "C" {
     static kCAGravityTopLeft: *mut Object;
     static kCAGravityBottomLeft: *mut Object;
 }
