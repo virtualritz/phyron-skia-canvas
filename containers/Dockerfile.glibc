@@ -28,8 +28,8 @@ RUN apt-get update && apt-get install -y -q \
     build-essential ninja-build cmake python3-venv lsb-release \
     libexpat1-dev libpng-dev
 
-# install clang v18
-ARG LLVM_VERSION=18
+# install clang v21
+ARG LLVM_VERSION=21
 COPY install-llvm.sh .
 RUN bash install-llvm.sh $LLVM_VERSION
 
@@ -50,8 +50,8 @@ ARG TARGETARCH
 RUN apt-get update && apt-get install -y -q \
   curl wget perl zip software-properties-common lsb-release build-essential ninja-build fonts-dejavu-core
 
-# install clang v18
-ARG LLVM_VERSION=18
+# install clang v21
+ARG LLVM_VERSION=21
 COPY install-llvm.sh .
 RUN bash install-llvm.sh $LLVM_VERSION
 
