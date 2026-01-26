@@ -13,11 +13,9 @@ index 3c156b8..76bfcce 100644
  
          let target = cargo::target();
  
-+        // link the static fontconfig and freetype libraries (with BDF support)
-+        // allow multiple definitions since Skia also has embedded freetype
++        // link static fontconfig (freetype BDF stubs are in skia-canvas build.rs)
 +        cargo::add_link_search("/opt/skia-static-libs");
-+        cargo::add_static_link_libs(&target, ["fontconfig", "freetype"]);
-+        println!("cargo::rustc-link-arg=-Wl,--allow-multiple-definition");
++        cargo::add_static_link_libs(&target, ["fontconfig"]);
 +
          cargo::add_static_link_libs(&target, self.built_libraries(true));
          cargo::add_link_libs(&self.link_libraries);

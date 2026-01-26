@@ -21,9 +21,8 @@ COPY ./install-fontlibs.sh /opt
 COPY ./freetype.cfg /opt
 RUN bash /opt/install-fontlibs.sh
 
-# move the static libs to a common location consistent across glibc & musl builds
+# move static fontconfig to a common location (freetype BDF stubs are in skia-canvas)
 RUN mkdir -p /opt/skia-static-libs && \
-    cp /usr/local/lib/libfreetype.a /opt/skia-static-libs && \
     cp /usr/local/lib/libfontconfig.a /opt/skia-static-libs
 
 # install gh

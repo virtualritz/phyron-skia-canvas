@@ -58,6 +58,9 @@ vulkano = { version = "0.35", optional = true }
 # windowing
 winit = { version = "0.30", features = ["serde"], optional = true }
 
+[build-dependencies]
+cc = "1"
+
 [profile.release]
 lto = "fat"
-odegen-units = 1
+codegen-units = 1
