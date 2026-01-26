@@ -10,12 +10,10 @@ export PATH="/opt/venv/bin:$PATH"
 pip install meson
 
 # compile dummy freetype lib (meant to mirror the api surface of skia's embedded copy via the custom modules.cfg)
-FREETYPE_VERSION=2.14.1
-FREETYPE_TAG=VER-2-14-1
-FREETYPE=freetype-${FREETYPE_TAG}
-FREETYPE_URL=https://github.com/freetype/freetype/archive/refs/tags/${FREETYPE_TAG}.tar.gz
+FREETYPE=freetype-2.13.3
+FREETYPE_URL=https://download.savannah.gnu.org/releases/freetype/${FREETYPE}.tar.xz
 FREETYPE_CFG=/opt/freetype.cfg
-curl -sfL --retry 3 $FREETYPE_URL | tar xzf - -C /opt
+curl -sfL --retry 3 -L $FREETYPE_URL | tar xJf - -C /opt
 cd /opt/${FREETYPE} && \
    cp $FREETYPE_CFG modules.cfg && \
    make && make install

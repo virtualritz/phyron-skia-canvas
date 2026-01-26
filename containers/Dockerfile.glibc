@@ -26,7 +26,7 @@ FROM debian:bullseye-slim AS dependencies
 RUN apt-get update && apt-get install -y -q \
     git perl curl wget gpg software-properties-common pkg-config \
     build-essential ninja-build cmake python3-venv lsb-release \
-    libexpat1-dev libpng-dev
+    libexpat1-dev libpng-dev gperf
 
 # install clang v21
 ARG LLVM_VERSION=21
