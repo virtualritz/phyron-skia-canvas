@@ -1,9 +1,21 @@
 name: Compile binaries
 on:
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Platforms to build'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - linux
+          - mac
+          - windows
 
 jobs:
   mac:
+    if: ${{ inputs.platforms == 'all' || inputs.platforms == 'mac' }}
     strategy:
       fail-fast: false
       matrix:
@@ -39,6 +51,7 @@ jobs:
           npm test && npm run upload
 
   windows:
+    if: ${{ inputs.platforms == 'all' || inputs.platforms == 'windows' }}
     strategy:
       fail-fast: false
       matrix:
@@ -76,6 +89,7 @@ jobs:
           npm test && npm run upload
 
   linux:
+    if: ${{ inputs.platforms == 'all' || inputs.platforms == 'linux' }}
     strategy:
       fail-fast: false
       matrix:
