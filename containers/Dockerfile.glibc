@@ -40,6 +40,7 @@ RUN bash /opt/install-fontlibs.sh
 
 # move the static libs to a common location consistent across glibc & musl builds
 RUN mkdir -p /opt/skia-static-libs && \
+    cp /usr/local/lib/libfreetype.a /opt/skia-static-libs && \
     cp /usr/local/lib/*/libfontconfig.a /opt/skia-static-libs
 
 # --------------------------------------------------------------------------------------------------------

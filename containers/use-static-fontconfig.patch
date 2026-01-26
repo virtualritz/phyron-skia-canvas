@@ -13,9 +13,9 @@ index 3c156b8..76bfcce 100644
  
          let target = cargo::target();
  
-+        // link the static fontconfig library
++        // link the static fontconfig and freetype libraries
 +        cargo::add_link_search("/opt/skia-static-libs");
-+        cargo::add_static_link_libs(&target, ["fontconfig"]);
++        cargo::add_static_link_libs(&target, ["fontconfig", "freetype"]);
 +
          cargo::add_static_link_libs(&target, self.built_libraries(true));
          cargo::add_link_libs(&self.link_libraries);
