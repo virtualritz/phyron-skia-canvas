@@ -25,6 +25,7 @@
     "build": "node lib/prebuild.mjs compile",
     "install": "node lib/prebuild.mjs download --or-compile",
     "upload": "node lib/prebuild.mjs upload",
+    "snapshot": "node lib/prebuild.mjs snapshot",
     "test": "node --test"
   },
   "dependencies": {
