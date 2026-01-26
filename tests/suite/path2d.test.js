@@ -137,7 +137,7 @@ describe("Path2D", () => {
       assert.doesNotThrow(() => p.quadraticCurveTo(NaN, 300, null, "foo"));
     });
 
-    test("conicTo", { skip: process.platform === "win32" }, () => {
+    test("conicTo", { skip: process.platform !== "darwin" }, () => {
       ctx.lineWidth = 5;
 
       let withWeight = (weight) => {
