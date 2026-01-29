@@ -6,7 +6,7 @@ pub mod engine;
 #[cfg(feature = "window")]
 pub mod renderer;
 
-static VK_FORMATS: &'static [VkFormat] = &[
+static VK_FORMATS: &[VkFormat] = &[
     VkFormat::R8G8B8A8_UNORM,
     VkFormat::R8G8B8A8_SRGB,
     VkFormat::R8_UNORM,

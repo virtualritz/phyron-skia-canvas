@@ -797,7 +797,7 @@ impl PageCache {
     }
 
     #[cfg(any(feature = "metal", feature = "vulkan"))]
-    fn _blit<'a>(
+    fn _blit(
         &self,
         surface: &mut Surface,
         dst_info: &ImageInfo,
@@ -808,7 +808,7 @@ impl PageCache {
         self.image.as_ref().map(|image| {
             image.read_pixels_with_context(
                 context,
-                &dst_info,
+                dst_info,
                 pixels,
                 dst_info.min_row_bytes(),
                 (src.x(), src.y()),

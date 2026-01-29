@@ -120,6 +120,17 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         "ColorFilter_makeLinearToSRGBGamma",
         color_filter::makeLinearToSRGBGamma,
     )?;
+    cx.export_function("ColorFilter_makeBlend", color_filter::makeBlend)?;
+    cx.export_function("ColorFilter_makeCompose", color_filter::makeCompose)?;
+    cx.export_function("ColorFilter_makeLerp", color_filter::makeLerp)?;
+    cx.export_function("ColorFilter_makeHSLAMatrix", color_filter::makeHSLAMatrix)?;
+    cx.export_function("ColorFilter_makeLighting", color_filter::makeLighting)?;
+    cx.export_function(
+        "ColorFilter_makeLumaColorFilter",
+        color_filter::makeLumaColorFilter,
+    )?;
+    cx.export_function("ColorFilter_makeTable", color_filter::makeTable)?;
+    cx.export_function("ColorFilter_makeTableARGB", color_filter::makeTableARGB)?;
     cx.export_function("ColorFilter_repr", color_filter::repr)?;
     cx.export_function("ColorFilter_delete", color_filter::delete)?;
 
@@ -133,6 +144,54 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function(
         "ImageFilter_makeDropShadowOnly",
         image_filter::makeDropShadowOnly,
+    )?;
+    cx.export_function("ImageFilter_makeOffset", image_filter::makeOffset)?;
+    cx.export_function("ImageFilter_makeDilate", image_filter::makeDilate)?;
+    cx.export_function("ImageFilter_makeErode", image_filter::makeErode)?;
+    cx.export_function("ImageFilter_makeMerge", image_filter::makeMerge)?;
+    cx.export_function("ImageFilter_makeEmpty", image_filter::makeEmpty)?;
+    cx.export_function("ImageFilter_makeTile", image_filter::makeTile)?;
+    // Advanced ImageFilter methods
+    cx.export_function("ImageFilter_makeBlend", image_filter::makeBlend)?;
+    cx.export_function("ImageFilter_makeArithmetic", image_filter::makeArithmetic)?;
+    cx.export_function(
+        "ImageFilter_makeDisplacementMap",
+        image_filter::makeDisplacementMap,
+    )?;
+    cx.export_function(
+        "ImageFilter_makeMatrixConvolution",
+        image_filter::makeMatrixConvolution,
+    )?;
+    cx.export_function(
+        "ImageFilter_makeMatrixTransform",
+        image_filter::makeMatrixTransform,
+    )?;
+    cx.export_function("ImageFilter_makeMagnifier", image_filter::makeMagnifier)?;
+    cx.export_function("ImageFilter_makeCrop", image_filter::makeCrop)?;
+    // Lighting ImageFilter methods
+    cx.export_function(
+        "ImageFilter_makeDistantLitDiffuse",
+        image_filter::makeDistantLitDiffuse,
+    )?;
+    cx.export_function(
+        "ImageFilter_makePointLitDiffuse",
+        image_filter::makePointLitDiffuse,
+    )?;
+    cx.export_function(
+        "ImageFilter_makeSpotLitDiffuse",
+        image_filter::makeSpotLitDiffuse,
+    )?;
+    cx.export_function(
+        "ImageFilter_makeDistantLitSpecular",
+        image_filter::makeDistantLitSpecular,
+    )?;
+    cx.export_function(
+        "ImageFilter_makePointLitSpecular",
+        image_filter::makePointLitSpecular,
+    )?;
+    cx.export_function(
+        "ImageFilter_makeSpotLitSpecular",
+        image_filter::makeSpotLitSpecular,
     )?;
     cx.export_function("ImageFilter_repr", image_filter::repr)?;
     cx.export_function("ImageFilter_delete", image_filter::delete)?;

@@ -336,10 +336,12 @@ impl Cadence {
         // the last 10% of the inter-frame time (up to 1.5ms), making
         // sure we can then draw immediately after
         let dt = self.last.elapsed();
-        if matches!(mode, LoopMode::Node) && dt >= wakeup && dt < render {
-            if let Some(sleep_time) = render.checked_sub(self.last.elapsed()) {
-                spin_sleep::sleep(sleep_time);
-            }
+        if matches!(mode, LoopMode::Node)
+            && dt >= wakeup
+            && dt < render
+            && let Some(sleep_time) = render.checked_sub(self.last.elapsed())
+        {
+            spin_sleep::sleep(sleep_time);
         }
 
         // call the draw callback if it's time & make sure the next deadline is

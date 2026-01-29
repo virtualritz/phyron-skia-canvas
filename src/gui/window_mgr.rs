@@ -29,28 +29,26 @@ impl WindowManager {
             .handle
             .outer_position()
             .map(|pt| pt.to_logical::<f32>(dpr))
-        {
-            if let Ok(inset) = window
+            && let Ok(inset) = window
                 .handle
                 .inner_position()
                 .map(|pt| pt.to_logical::<f32>(dpr))
-            {
-                let delta = inset.y - auto_loc.y;
-                let reference = self.last.unwrap_or(auto_loc);
-                let (left, top) = (
-                    window.spec.left.unwrap_or(reference.x),
-                    window.spec.top.unwrap_or(reference.y),
-                );
+        {
+            let delta = inset.y - auto_loc.y;
+            let reference = self.last.unwrap_or(auto_loc);
+            let (left, top) = (
+                window.spec.left.unwrap_or(reference.x),
+                window.spec.top.unwrap_or(reference.y),
+            );
 
-                window
-                    .handle
-                    .set_outer_position(LogicalPosition::new(left, top));
-                window.handle.set_visible(true);
+            window
+                .handle
+                .set_outer_position(LogicalPosition::new(left, top));
+            window.handle.set_visible(true);
 
-                window.spec.left = Some(left);
-                window.spec.top = Some(top);
-                self.last = Some(LogicalPosition::new(left + delta, top + delta));
-            }
+            window.spec.left = Some(left);
+            window.spec.top = Some(top);
+            self.last = Some(LogicalPosition::new(left + delta, top + delta));
         }
 
         self.windows.push(window);
@@ -74,10 +72,10 @@ impl WindowManager {
                 win.set_size(LogicalSize::new(spec.width as u32, spec.height as u32));
             }
 
-            if let (Some(left), Some(top)) = (spec.left, spec.top) {
-                if spec.left != win.spec.left || spec.top != win.spec.top {
-                    win.set_position(LogicalPosition::new(left as i32, top as i32));
-                }
+            if let (Some(left), Some(top)) = (spec.left, spec.top)
+                && (spec.left != win.spec.left || spec.top != win.spec.top)
+            {
+                win.set_position(LogicalPosition::new(left as i32, top as i32));
             }
 
             if spec.title != win.spec.title {

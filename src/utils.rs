@@ -73,32 +73,80 @@ pub fn float_array_arg(cx: &mut FunctionContext, idx: usize, len: usize) -> Neon
     }
 
     // Try ArrayLike (has .length property)
-    if let Ok(obj) = arg.downcast::<JsObject, _>(cx) {
-        if let Ok(length_val) = obj.get::<JsValue, _, _>(cx, "length") {
-            if let Ok(length) = length_val.downcast::<JsNumber, _>(cx) {
-                let len_num = length.value(cx) as usize;
-                if len_num != len {
-                    return cx
-                        .throw_range_error(format!("Expected {} elements, got {}", len, len_num));
-                }
-                let mut result = Vec::with_capacity(len);
-                for i in 0..len {
-                    let val: Handle<JsValue> = obj.get(cx, i as u32)?;
-                    if let Ok(num) = val.downcast::<JsNumber, _>(cx) {
-                        result.push(num.value(cx) as f32);
-                    } else {
-                        return cx.throw_type_error(format!("Element {} is not a number", i));
-                    }
-                }
-                return Ok(result);
+    if let Ok(obj) = arg.downcast::<JsObject, _>(cx)
+        && let Ok(length_val) = obj.get::<JsValue, _, _>(cx, "length")
+        && let Ok(length) = length_val.downcast::<JsNumber, _>(cx)
+    {
+        let len_num = length.value(cx) as usize;
+        if len_num != len {
+            return cx.throw_range_error(format!("Expected {} elements, got {}", len, len_num));
+        }
+        let mut result = Vec::with_capacity(len);
+        for i in 0..len {
+            let val: Handle<JsValue> = obj.get(cx, i as u32)?;
+            if let Ok(num) = val.downcast::<JsNumber, _>(cx) {
+                result.push(num.value(cx) as f32);
+            } else {
+                return cx.throw_type_error(format!("Element {} is not a number", i));
             }
         }
+        return Ok(result);
     }
 
-    cx.throw_type_error(format!(
-        "Expected array or ArrayLike with {} numbers",
-        len
-    ))
+    cx.throw_type_error(format!("Expected array or ArrayLike with {} numbers", len))
+}
+
+pub fn u8_array_arg(cx: &mut FunctionContext, idx: usize, len: usize) -> NeonResult<Vec<u8>> {
+    let arg = cx.argument::<JsValue>(idx)?;
+
+    if let Ok(array) = arg.downcast::<JsArray, _>(cx) {
+        let array_len = array.len(cx) as usize;
+        if array_len != len {
+            return cx.throw_range_error(format!("Expected {} elements, got {}", len, array_len));
+        }
+        let mut result = Vec::with_capacity(len);
+        for i in 0..len {
+            let val: Handle<JsValue> = array.get(cx, i as u32)?;
+            if let Ok(num) = val.downcast::<JsNumber, _>(cx) {
+                result.push(num.value(cx) as u8);
+            } else {
+                return cx.throw_type_error(format!("Element {} is not a number", i));
+            }
+        }
+        return Ok(result);
+    }
+
+    cx.throw_type_error(format!("Expected array with {} elements", len))
+}
+
+pub fn opt_u8_array_arg(cx: &mut FunctionContext, idx: usize, len: usize) -> Option<Vec<u8>> {
+    let arg = cx.argument_opt(idx)?;
+
+    if arg.is_a::<JsNull, _>(cx) || arg.is_a::<JsUndefined, _>(cx) {
+        return None;
+    }
+
+    if let Ok(array) = arg.downcast::<JsArray, _>(cx) {
+        let array_len = array.len(cx) as usize;
+        if array_len != len {
+            return None;
+        }
+        let mut result = Vec::with_capacity(len);
+        for i in 0..len {
+            if let Ok(val) = array.get::<JsValue, _, _>(cx, i as u32) {
+                if let Ok(num) = val.downcast::<JsNumber, _>(cx) {
+                    result.push(num.value(cx) as u8);
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        }
+        return Some(result);
+    }
+
+    None
 }
 
 pub fn check_argc(cx: &mut FunctionContext, argc: usize) -> NeonResult<()> {

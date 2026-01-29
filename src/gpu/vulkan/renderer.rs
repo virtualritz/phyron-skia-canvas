@@ -49,10 +49,12 @@ impl VulkanRenderer {
                     ..Default::default()
                 },
             )
-            .expect(&format!(
-                "Vulkan: could not create instance supporting: {:?}",
-                required_extensions
-            ))
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Vulkan: could not create instance supporting: {:?}",
+                    required_extensions
+                )
+            })
         };
 
         let device_extensions = DeviceExtensions {
@@ -179,40 +181,36 @@ impl VulkanRenderer {
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
         self.cache.state = Resizing;
         self.backend.swapchain_is_valid = false;
-        self.backend.prepare_swapchain(size.into());
+        self.backend.prepare_swapchain(size);
     }
 
     pub fn draw(&mut self, page: Page, matrix: Matrix, props: SurfaceProps, matte: Color) {
         let (clip, _) = matrix.map_rect(page.bounds);
         let dpr = self.window.scale_factor() as f32;
 
-        self.backend
-            .render_frame(&self.window, &props, |canvas| {
-                // draw background (either use raster cache or set to window’s
-                // background color)
-                canvas.clear(Color::TRANSPARENT);
-                if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip) {
-                    canvas.draw_image_rect(
-                        image,
-                        Some((src, SrcRectConstraint::Strict)),
-                        dst,
-                        &Paint::default(),
-                    );
-                } else {
-                    canvas.clear(matte);
-                }
+        if let Some(frame) = self.backend.render_frame(&self.window, &props, |canvas| {
+            // draw background (either use raster cache or set to window’s
+            // background color)
+            canvas.clear(Color::TRANSPARENT);
+            if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip) {
+                canvas.draw_image_rect(
+                    image,
+                    Some((src, SrcRectConstraint::Strict)),
+                    dst,
+                    &Paint::default(),
+                );
+            } else {
+                canvas.clear(matte);
+            }
 
-                // draw newly added vector layers
-                canvas.scale((dpr, dpr)).clip_rect(clip, None, Some(true));
-                for pict in page.layers.iter().skip(self.cache.depth()) {
-                    canvas.draw_picture(pict, Some(&matrix), None);
-                }
-            })
-            .map(|frame| {
-                // cache frame contents for use as background of next render
-                // pass
-                self.cache.update(frame, &page, matte, dpr, clip);
-            });
+            // draw newly added vector layers
+            canvas.scale((dpr, dpr)).clip_rect(clip, None, Some(true));
+            for pict in page.layers.iter().skip(self.cache.depth()) {
+                canvas.draw_picture(pict, Some(&matrix), None);
+            }
+        }) {
+            self.cache.update(frame, &page, matte, dpr, clip);
+        }
     }
 }
 
@@ -291,7 +289,7 @@ impl VulkanBackend {
                 })
             };
 
-            let direct_context = direct_contexts::make_vulkan(
+            direct_contexts::make_vulkan(
                 &vk::BackendContext::new(
                     instance.handle().as_raw() as _,
                     device.physical_device().handle().as_raw() as _,
@@ -304,9 +302,7 @@ impl VulkanBackend {
                 ),
                 None,
             )
-            .expect("Vulkan: Failed to create Skia direct context");
-
-            direct_context
+            .expect("Vulkan: Failed to create Skia direct context")
         };
 
         Self {

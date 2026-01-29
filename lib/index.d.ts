@@ -598,6 +598,77 @@ export class CanvasTexture {}
 /** 4x5 row-major color matrix (20 elements) */
 export type ColorMatrix = Float32Array | ArrayLike<number>;
 
+//
+// Filter Types
+//
+
+/** 3D point for lighting effects [x, y, z] */
+export type Point3 = [number, number, number];
+
+/** Color channel selector for displacement maps */
+export type ColorChannel = "R" | "G" | "B" | "A";
+
+/** Tile mode for edge handling */
+export type TileMode = "clamp" | "repeat" | "mirror" | "decal";
+
+/** Sampling mode for image transformations */
+export type SamplingMode = "nearest" | "linear";
+
+/** Blend modes for image compositing */
+export type BlendMode =
+  | "clear"
+  | "src"
+  | "source"
+  | "dst"
+  | "destination"
+  | "srcOver"
+  | "src-over"
+  | "source-over"
+  | "dstOver"
+  | "dst-over"
+  | "destination-over"
+  | "srcIn"
+  | "src-in"
+  | "source-in"
+  | "dstIn"
+  | "dst-in"
+  | "destination-in"
+  | "srcOut"
+  | "src-out"
+  | "source-out"
+  | "dstOut"
+  | "dst-out"
+  | "destination-out"
+  | "srcATop"
+  | "src-atop"
+  | "source-atop"
+  | "dstATop"
+  | "dst-atop"
+  | "destination-atop"
+  | "xor"
+  | "plus"
+  | "lighter"
+  | "modulate"
+  | "screen"
+  | "overlay"
+  | "darken"
+  | "lighten"
+  | "colorDodge"
+  | "color-dodge"
+  | "colorBurn"
+  | "color-burn"
+  | "hardLight"
+  | "hard-light"
+  | "softLight"
+  | "soft-light"
+  | "difference"
+  | "exclusion"
+  | "multiply"
+  | "hue"
+  | "saturation"
+  | "color"
+  | "luminosity";
+
 /**
  * ColorFilter for color transformations.
  * Mirrors CanvasKit.ColorFilter API.
@@ -628,6 +699,68 @@ export class ColorFilter {
    * Create ColorFilter that converts linear gamma to sRGB.
    */
   static MakeLinearToSRGBGamma(): ColorFilter;
+
+  /**
+   * Create ColorFilter that blends with a solid color.
+   * @param color - CSS color string
+   * @param mode - blend mode (e.g., "multiply", "screen", "overlay")
+   */
+  static MakeBlend(color: string, mode: string): ColorFilter | null;
+
+  /**
+   * Compose two ColorFilters (outer applied after inner).
+   */
+  static MakeCompose(
+    outer: ColorFilter,
+    inner: ColorFilter,
+  ): ColorFilter | null;
+
+  /**
+   * Interpolate between two ColorFilters.
+   * @param t - interpolation factor (0 = dst, 1 = src)
+   * @param dst - destination filter
+   * @param src - source filter
+   */
+  static MakeLerp(
+    t: number,
+    dst: ColorFilter,
+    src: ColorFilter,
+  ): ColorFilter | null;
+
+  /**
+   * Create HSLA color matrix filter (operates in HSL space).
+   * @param matrix - 20 elements (4x5 row-major)
+   */
+  static MakeHSLAMatrix(matrix: ColorMatrix): ColorFilter;
+
+  /**
+   * Create lighting effect filter.
+   * @param multiply - multiply color (CSS string)
+   * @param add - add color (CSS string)
+   */
+  static MakeLighting(multiply: string, add: string): ColorFilter | null;
+
+  /**
+   * Create luma (luminance) color filter - extracts brightness to alpha.
+   */
+  static MakeLumaColorFilter(): ColorFilter;
+
+  /**
+   * Create table-based color filter (same table for all channels).
+   * @param table - 256 elements mapping input values to output values
+   */
+  static MakeTable(table: Uint8Array | number[]): ColorFilter | null;
+
+  /**
+   * Create table-based color filter with separate tables per channel.
+   * Pass null for any channel to leave it unchanged.
+   */
+  static MakeTableARGB(
+    tableA: Uint8Array | number[] | null,
+    tableR: Uint8Array | number[] | null,
+    tableG: Uint8Array | number[] | null,
+    tableB: Uint8Array | number[] | null,
+  ): ColorFilter | null;
 
   /**
    * Mark filter as deleted. Use-after-delete throws Error.
@@ -711,6 +844,293 @@ export class ImageFilter {
     sigmaX: number,
     sigmaY: number,
     color: string | [number, number, number, number],
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Create offset ImageFilter.
+   * @param dx - x offset
+   * @param dy - y offset
+   * @param input - optional input filter for chaining
+   */
+  static MakeOffset(
+    dx: number,
+    dy: number,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Create morphological dilation ImageFilter.
+   * @param radiusX - horizontal radius
+   * @param radiusY - vertical radius
+   * @param input - optional input filter for chaining
+   */
+  static MakeDilate(
+    radiusX: number,
+    radiusY: number,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Create morphological erosion ImageFilter.
+   * @param radiusX - horizontal radius
+   * @param radiusY - vertical radius
+   * @param input - optional input filter for chaining
+   */
+  static MakeErode(
+    radiusX: number,
+    radiusY: number,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Merge multiple ImageFilters into one.
+   * @param filters - array of filters to merge (null entries allowed)
+   */
+  static MakeMerge(filters: (ImageFilter | null)[]): ImageFilter | null;
+
+  /**
+   * Create empty (no-op) ImageFilter.
+   */
+  static MakeEmpty(): ImageFilter;
+
+  /**
+   * Create tile ImageFilter.
+   * @param src - source rect [x, y, width, height]
+   * @param dst - destination rect [x, y, width, height]
+   * @param input - optional input filter for chaining
+   */
+  static MakeTile(
+    src: [number, number, number, number],
+    dst: [number, number, number, number],
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  // ==================== Advanced ImageFilter methods ====================
+
+  /**
+   * Blend two image filters using a blend mode.
+   * @param mode - blend mode ("srcOver", "multiply", "screen", etc.)
+   * @param background - background filter (or null for source)
+   * @param foreground - foreground filter (or null for source)
+   */
+  static MakeBlend(
+    mode: BlendMode,
+    background?: ImageFilter | null,
+    foreground?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Arithmetic blend: k1*fg*bg + k2*fg + k3*bg + k4.
+   * @param k1 - coefficient for fg*bg
+   * @param k2 - coefficient for fg
+   * @param k3 - coefficient for bg
+   * @param k4 - constant offset
+   * @param enforcePMColor - enforce premultiplied color (default true)
+   * @param background - background filter (or null for source)
+   * @param foreground - foreground filter (or null for source)
+   */
+  static MakeArithmetic(
+    k1: number,
+    k2: number,
+    k3: number,
+    k4: number,
+    enforcePMColor?: boolean,
+    background?: ImageFilter | null,
+    foreground?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Displacement map filter.
+   * @param xChannel - color channel for x displacement ("R", "G", "B", "A")
+   * @param yChannel - color channel for y displacement ("R", "G", "B", "A")
+   * @param scale - displacement scale
+   * @param displacement - displacement map filter (or null for source)
+   * @param color - color source filter (or null for source)
+   */
+  static MakeDisplacementMap(
+    xChannel: ColorChannel,
+    yChannel: ColorChannel,
+    scale: number,
+    displacement?: ImageFilter | null,
+    color?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Matrix convolution filter (e.g., sharpen, edge detect).
+   * @param kernelSize - [width, height] of kernel
+   * @param kernel - convolution kernel (width*height elements)
+   * @param gain - scale factor applied to result
+   * @param bias - bias added to result
+   * @param kernelOffset - [x, y] offset for kernel center
+   * @param tileMode - tile mode for edge handling (default "decal")
+   * @param convolveAlpha - whether to convolve alpha channel (default true)
+   * @param input - optional input filter for chaining
+   */
+  static MakeMatrixConvolution(
+    kernelSize: [number, number],
+    kernel: number[],
+    gain: number,
+    bias: number,
+    kernelOffset: [number, number],
+    tileMode?: TileMode,
+    convolveAlpha?: boolean,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Apply a matrix transformation to the image.
+   * @param matrix - 6 elements (2D affine) or 9 elements (3x3)
+   * @param sampling - sampling mode ("nearest" or "linear", default "linear")
+   * @param input - optional input filter for chaining
+   */
+  static MakeMatrixTransform(
+    matrix: number[],
+    sampling?: SamplingMode,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Magnifier (fisheye) effect.
+   * @param lensBounds - [x, y, width, height] of lens area
+   * @param zoomAmount - magnification factor
+   * @param inset - edge distortion width
+   * @param sampling - sampling mode (default "linear")
+   * @param input - optional input filter for chaining
+   */
+  static MakeMagnifier(
+    lensBounds: [number, number, number, number],
+    zoomAmount: number,
+    inset: number,
+    sampling?: SamplingMode,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Crop filter with optional tile mode.
+   * @param rect - [x, y, width, height] crop rectangle
+   * @param tileMode - tile mode for pixels outside rect (default "decal")
+   * @param input - optional input filter for chaining
+   */
+  static MakeCrop(
+    rect: [number, number, number, number],
+    tileMode?: TileMode,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  // ==================== Lighting ImageFilter methods ====================
+
+  /**
+   * Diffuse lighting from a distant light source.
+   * @param direction - [x, y, z] light direction
+   * @param lightColor - CSS color of the light
+   * @param surfaceScale - height scale factor
+   * @param kd - diffuse reflectance coefficient
+   * @param input - optional input filter (alpha as height map)
+   */
+  static MakeDistantLitDiffuse(
+    direction: Point3,
+    lightColor: string,
+    surfaceScale: number,
+    kd: number,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Diffuse lighting from a point light source.
+   * @param location - [x, y, z] light position
+   * @param lightColor - CSS color of the light
+   * @param surfaceScale - height scale factor
+   * @param kd - diffuse reflectance coefficient
+   * @param input - optional input filter
+   */
+  static MakePointLitDiffuse(
+    location: Point3,
+    lightColor: string,
+    surfaceScale: number,
+    kd: number,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Diffuse lighting from a spot light source.
+   * @param location - [x, y, z] light position
+   * @param target - [x, y, z] spot target
+   * @param falloffExponent - falloff exponent
+   * @param cutoffAngle - cutoff angle in degrees
+   * @param lightColor - CSS color of the light
+   * @param surfaceScale - height scale factor
+   * @param kd - diffuse reflectance coefficient
+   * @param input - optional input filter
+   */
+  static MakeSpotLitDiffuse(
+    location: Point3,
+    target: Point3,
+    falloffExponent: number,
+    cutoffAngle: number,
+    lightColor: string,
+    surfaceScale: number,
+    kd: number,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Specular lighting from a distant light source.
+   * @param direction - [x, y, z] light direction
+   * @param lightColor - CSS color of the light
+   * @param surfaceScale - height scale factor
+   * @param ks - specular reflectance coefficient
+   * @param shininess - specular exponent
+   * @param input - optional input filter
+   */
+  static MakeDistantLitSpecular(
+    direction: Point3,
+    lightColor: string,
+    surfaceScale: number,
+    ks: number,
+    shininess: number,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Specular lighting from a point light source.
+   * @param location - [x, y, z] light position
+   * @param lightColor - CSS color of the light
+   * @param surfaceScale - height scale factor
+   * @param ks - specular reflectance coefficient
+   * @param shininess - specular exponent
+   * @param input - optional input filter
+   */
+  static MakePointLitSpecular(
+    location: Point3,
+    lightColor: string,
+    surfaceScale: number,
+    ks: number,
+    shininess: number,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Specular lighting from a spot light source.
+   * @param location - [x, y, z] light position
+   * @param target - [x, y, z] spot target
+   * @param falloffExponent - falloff exponent
+   * @param cutoffAngle - cutoff angle in degrees
+   * @param lightColor - CSS color of the light
+   * @param surfaceScale - height scale factor
+   * @param ks - specular reflectance coefficient
+   * @param shininess - specular exponent
+   * @param input - optional input filter
+   */
+  static MakeSpotLitSpecular(
+    location: Point3,
+    target: Point3,
+    falloffExponent: number,
+    cutoffAngle: number,
+    lightColor: string,
+    surfaceScale: number,
+    ks: number,
+    shininess: number,
     input?: ImageFilter | null,
   ): ImageFilter | null;
 

@@ -127,7 +127,7 @@ impl Window {
             .with_decorations(!spec.borderless);
 
         let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        let renderer = Renderer::for_window(&event_loop, handle.clone());
+        let renderer = Renderer::for_window(event_loop, handle.clone());
         let sieve = Sieve::new(handle.scale_factor());
 
         let cursor_icon = CursorIcon::from_str(&spec.cursor).ok();
@@ -329,11 +329,11 @@ impl Window {
     }
 
     pub fn redraw_if_resized(&mut self) {
-        if let Some(resize) = self.resized_at {
-            if resize.elapsed() > RESIZE_CLEANUP_INTERVAL {
-                self.resized_at = None;
-                self.handle.request_redraw();
-            }
+        if let Some(resize) = self.resized_at
+            && resize.elapsed() > RESIZE_CLEANUP_INTERVAL
+        {
+            self.resized_at = None;
+            self.handle.request_redraw();
         }
     }
 

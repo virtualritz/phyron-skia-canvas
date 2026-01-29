@@ -5,8 +5,6 @@ fn main() {
     // BDF queries - we don't use legacy bitmap fonts anyway.
     #[cfg(target_os = "linux")]
     {
-        cc::Build::new()
-            .file("src/bdf_stub.c")
-            .compile("bdf_stub");
+        cc::Build::new().file("src/bdf_stub.c").compile("bdf_stub");
     }
 }

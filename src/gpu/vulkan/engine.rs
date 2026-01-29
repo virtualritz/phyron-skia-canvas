@@ -136,7 +136,11 @@ impl VulkanEngine {
     where
         F: FnOnce(Option<&mut DirectContext>),
     {
-        Self::with_context(|ctx| Ok(f(Some(&mut ctx.context)))).ok();
+        Self::with_context(|ctx| {
+            f(Some(&mut ctx.context));
+            Ok(())
+        })
+        .ok();
     }
 
     pub fn make_surface(image_info: &ImageInfo, opts: &ExportOptions) -> Result<Surface, String> {
