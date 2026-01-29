@@ -5,7 +5,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     context::BoxedContext2D,
-    filter::ImageFilter,
+    filter::SamplingFilter,
     image::{BoxedImage, Content},
     utils::*,
 };
@@ -26,12 +26,12 @@ pub struct CanvasPattern {
 }
 
 impl CanvasPattern {
-    pub fn shader(&self, image_filter: ImageFilter) -> Option<Shader> {
+    pub fn shader(&self, sampling_filter: SamplingFilter) -> Option<Shader> {
         let stamp = self.stamp.borrow();
 
         match &stamp.content {
             Content::Bitmap(image) => image
-                .to_shader(stamp.repeat, image_filter.sampling(), None)
+                .to_shader(stamp.repeat, sampling_filter.sampling(), None)
                 .map(|shader| shader.with_local_matrix(&stamp.matrix)),
             Content::Vector(pict, ..) => {
                 let tile_rect = Rect::from_size(stamp.dims);

@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 use neon::prelude::*;
 use skia_safe::{
-    BlendMode, Canvas as SkCanvas, ClipOp, Color, Color4f, ColorSpace, Contains, IRect, Image,
-    Paint, PaintStyle, Path, PathBuilder, PathFillType, PathOp, Picture, PictureRecorder, Point,
-    Rect, Size,
+    BlendMode, Canvas as SkCanvas, ClipOp, Color, Color4f, ColorFilter as SkColorFilter,
+    ColorSpace, Contains, IRect, Image, ImageFilter as SkImageFilter, Paint, PaintStyle, Path,
+    PathBuilder, PathFillType, PathOp, Picture, PictureRecorder, Point, Rect, Size,
     canvas::SrcRectConstraint::Strict,
     dash_path_effect,
     font_style::{FontStyle, Width},
@@ -19,7 +19,7 @@ pub mod api;
 pub mod page;
 
 use crate::{
-    filter::{Filter, FilterQuality, ImageFilter},
+    filter::{Filter, SamplingFilter, SamplingQuality},
     font_library::FontLibrary,
     gpu::RenderingEngine,
     gradient::{BoxedCanvasGradient, CanvasGradient},
@@ -65,8 +65,12 @@ pub struct State {
 
     global_alpha: f32,
     global_composite_operation: BlendMode,
-    image_filter: ImageFilter,
+    sampling_filter: SamplingFilter,
     filter: Filter,
+
+    // Skia filter objects for CanvasKit parity
+    skia_color_filter: Option<SkColorFilter>,
+    skia_image_filter: Option<SkImageFilter>,
 
     font: String,
     font_variant: String,
@@ -111,11 +115,14 @@ impl Default for State {
 
             global_alpha: 1.0,
             global_composite_operation: BlendMode::SrcOver,
-            image_filter: ImageFilter {
+            sampling_filter: SamplingFilter {
                 smoothing: true,
-                quality: FilterQuality::Low,
+                quality: SamplingQuality::Low,
             },
             filter: Filter::default(),
+
+            skia_color_filter: None,
+            skia_image_filter: None,
 
             shadow_blur: 0.0,
             shadow_color: TRANSPARENT,
@@ -566,7 +573,7 @@ impl Context2D {
     pub fn draw_image(&mut self, image: &Image, src_rect: &Rect, dst_rect: &Rect) {
         let paint = self.paint_for_image();
         self.render_to_canvas(&paint, |canvas, paint| {
-            let sampling = self.state.image_filter.sampling();
+            let sampling = self.state.sampling_filter.sampling();
             canvas.draw_image_rect_with_sampling_options(
                 image,
                 Some((src_rect, Strict)),
@@ -676,13 +683,30 @@ impl Context2D {
 
     pub fn paint_for_drawing(&mut self, style: PaintStyle) -> Paint {
         let mut paint = self.state.paint.clone();
+
+        // 1. Apply Skia colorFilter (operates on source colors before blend)
+        if let Some(cf) = &self.state.skia_color_filter {
+            paint.set_color_filter(cf.clone());
+        }
+
+        // 2. Apply CSS filter (image_filter + mask_filter)
         self.state
             .filter
             .mix_into(&mut paint, self.state.matrix, false);
+
+        // 3. Compose Skia imageFilter with CSS imageFilter (if both present)
+        if let Some(skia_imgf) = &self.state.skia_image_filter {
+            let final_image_filter = match paint.image_filter() {
+                Some(css_imgf) => image_filters::compose(skia_imgf.clone(), css_imgf),
+                None => Some(skia_imgf.clone()),
+            };
+            paint.set_image_filter(final_image_filter);
+        }
+
         self.state.dye(style).mix_into(
             &mut paint,
             self.state.global_alpha,
-            self.state.image_filter,
+            self.state.sampling_filter,
         );
         paint.set_style(style);
 
@@ -719,10 +743,27 @@ impl Context2D {
 
     pub fn paint_for_image(&mut self) -> Paint {
         let mut paint = self.state.paint.clone();
+
+        // 1. Apply Skia colorFilter (operates on source colors before blend)
+        if let Some(cf) = &self.state.skia_color_filter {
+            paint.set_color_filter(cf.clone());
+        }
+
+        // 2. Apply CSS filter (image_filter + mask_filter)
         self.state
             .filter
             .mix_into(&mut paint, self.state.matrix, true)
             .set_alpha_f(self.state.global_alpha);
+
+        // 3. Compose Skia imageFilter with CSS imageFilter (if both present)
+        if let Some(skia_imgf) = &self.state.skia_image_filter {
+            let final_image_filter = match paint.image_filter() {
+                Some(css_imgf) => image_filters::compose(skia_imgf.clone(), css_imgf),
+                None => Some(skia_imgf.clone()),
+            };
+            paint.set_image_filter(final_image_filter);
+        }
+
         paint
     }
 
@@ -815,7 +856,7 @@ impl Dye {
         }
     }
 
-    pub fn mix_into(&self, paint: &mut Paint, alpha: f32, image_filter: ImageFilter) {
+    pub fn mix_into(&self, paint: &mut Paint, alpha: f32, sampling_filter: SamplingFilter) {
         match self {
             Dye::Color(color) => {
                 let mut color = Color4f::from(*color);
@@ -827,7 +868,7 @@ impl Dye {
             }
             Dye::Pattern(pattern) => {
                 paint
-                    .set_shader(pattern.shader(image_filter))
+                    .set_shader(pattern.shader(sampling_filter))
                     .set_alpha_f(alpha);
             }
             Dye::Texture(texture) => {

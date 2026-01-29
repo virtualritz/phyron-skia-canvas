@@ -2,6 +2,29 @@
 
 <!--## 🥚 ⟩ [Unreleased]-->
 
+## 📦 ⟩ [v3.3.0] ⟩ Jan 29, 2026
+
+### New Features
+
+- **CanvasKit Filter Parity**: Added `ColorFilter` and `ImageFilter` classes with CanvasKit-compatible API
+  - `ColorFilter.MakeMatrix(matrix)` - 4x5 color transformation matrix
+  - `ColorFilter.MakeSRGBToLinearGamma()` - sRGB to linear gamma conversion
+  - `ColorFilter.MakeLinearToSRGBGamma()` - linear to sRGB gamma conversion
+  - `ImageFilter.MakeColorFilter(colorFilter, input?)` - wrap ColorFilter as ImageFilter
+  - `ImageFilter.MakeCompose(outer, inner)` - compose two ImageFilters
+  - `ImageFilter.MakeBlur(sigmaX, sigmaY, tileMode?, input?)` - gaussian blur
+  - `ImageFilter.MakeDropShadow(dx, dy, sigmaX, sigmaY, color, input?)` - drop shadow with source
+  - `ImageFilter.MakeDropShadowOnly(dx, dy, sigmaX, sigmaY, color, input?)` - drop shadow only
+
+- **Context Filter Properties**: Added `ctx.colorFilter` and `ctx.imageFilter` properties
+  - Filters apply during drawing operations (fillRect, stroke, drawImage, etc.)
+  - Filters compose with existing CSS `ctx.filter` property
+  - Filters work correctly with `save()`/`restore()`/`reset()`
+
+### Internal Changes
+
+- Renamed internal `ImageFilter` → `SamplingFilter` to avoid naming collision with new Skia ImageFilter wrapper
+
 ## 📦 ⟩ [v3.0.8] ⟩ Sep 25, 2025
 
 ### Bugfix

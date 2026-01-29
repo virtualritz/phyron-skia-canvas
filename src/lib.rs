@@ -3,6 +3,7 @@
 use neon::prelude::*;
 
 mod canvas;
+mod color_filter;
 mod context;
 mod filter;
 mod font_library;
@@ -11,6 +12,7 @@ mod gradient;
 #[cfg(feature = "window")]
 mod gui;
 mod image;
+mod image_filter;
 mod path;
 mod pattern;
 mod texture;
@@ -105,6 +107,35 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
 
     cx.export_function("CanvasTexture_new", texture::new)?;
     cx.export_function("CanvasTexture_repr", texture::repr)?;
+
+    // -- ColorFilter
+    // -------------------------------------------------------------------------------
+
+    cx.export_function("ColorFilter_makeMatrix", color_filter::makeMatrix)?;
+    cx.export_function(
+        "ColorFilter_makeSRGBToLinearGamma",
+        color_filter::makeSRGBToLinearGamma,
+    )?;
+    cx.export_function(
+        "ColorFilter_makeLinearToSRGBGamma",
+        color_filter::makeLinearToSRGBGamma,
+    )?;
+    cx.export_function("ColorFilter_repr", color_filter::repr)?;
+    cx.export_function("ColorFilter_delete", color_filter::delete)?;
+
+    // -- ImageFilter
+    // -------------------------------------------------------------------------------
+
+    cx.export_function("ImageFilter_makeColorFilter", image_filter::makeColorFilter)?;
+    cx.export_function("ImageFilter_makeCompose", image_filter::makeCompose)?;
+    cx.export_function("ImageFilter_makeBlur", image_filter::makeBlur)?;
+    cx.export_function("ImageFilter_makeDropShadow", image_filter::makeDropShadow)?;
+    cx.export_function(
+        "ImageFilter_makeDropShadowOnly",
+        image_filter::makeDropShadowOnly,
+    )?;
+    cx.export_function("ImageFilter_repr", image_filter::repr)?;
+    cx.export_function("ImageFilter_delete", image_filter::delete)?;
 
     // -- FontLibrary
     // -------------------------------------------------------------------------------
@@ -395,6 +426,24 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function(
         "CanvasRenderingContext2D_set_shadowOffsetY",
         ctx::set_shadowOffsetY,
+    )?;
+
+    // Skia filter properties (CanvasKit parity)
+    cx.export_function(
+        "CanvasRenderingContext2D_get_colorFilter",
+        ctx::get_colorFilter,
+    )?;
+    cx.export_function(
+        "CanvasRenderingContext2D_set_colorFilter",
+        ctx::set_colorFilter,
+    )?;
+    cx.export_function(
+        "CanvasRenderingContext2D_get_skiaImageFilter",
+        ctx::get_skiaImageFilter,
+    )?;
+    cx.export_function(
+        "CanvasRenderingContext2D_set_skiaImageFilter",
+        ctx::set_skiaImageFilter,
     )?;
 
     // -- Window -----------------------------------------------------------------------------------

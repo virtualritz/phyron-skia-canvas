@@ -49,6 +49,58 @@ pub fn to_radians(degrees: f32) -> f32 {
     degrees / 180.0 * PI
 }
 
+/// Parse fixed-length float array from JS (copies input).
+/// Supports Float32Array, regular arrays, and ArrayLike objects.
+pub fn float_array_arg(cx: &mut FunctionContext, idx: usize, len: usize) -> NeonResult<Vec<f32>> {
+    let arg = cx.argument::<JsValue>(idx)?;
+
+    // Try as array first (most common case for JS)
+    if let Ok(array) = arg.downcast::<JsArray, _>(cx) {
+        let array_len = array.len(cx) as usize;
+        if array_len != len {
+            return cx.throw_range_error(format!("Expected {} elements, got {}", len, array_len));
+        }
+        let mut result = Vec::with_capacity(len);
+        for i in 0..len {
+            let val: Handle<JsValue> = array.get(cx, i as u32)?;
+            if let Ok(num) = val.downcast::<JsNumber, _>(cx) {
+                result.push(num.value(cx) as f32);
+            } else {
+                return cx.throw_type_error(format!("Element {} is not a number", i));
+            }
+        }
+        return Ok(result);
+    }
+
+    // Try ArrayLike (has .length property)
+    if let Ok(obj) = arg.downcast::<JsObject, _>(cx) {
+        if let Ok(length_val) = obj.get::<JsValue, _, _>(cx, "length") {
+            if let Ok(length) = length_val.downcast::<JsNumber, _>(cx) {
+                let len_num = length.value(cx) as usize;
+                if len_num != len {
+                    return cx
+                        .throw_range_error(format!("Expected {} elements, got {}", len, len_num));
+                }
+                let mut result = Vec::with_capacity(len);
+                for i in 0..len {
+                    let val: Handle<JsValue> = obj.get(cx, i as u32)?;
+                    if let Ok(num) = val.downcast::<JsNumber, _>(cx) {
+                        result.push(num.value(cx) as f32);
+                    } else {
+                        return cx.throw_type_error(format!("Element {} is not a number", i));
+                    }
+                }
+                return Ok(result);
+            }
+        }
+    }
+
+    cx.throw_type_error(format!(
+        "Expected array or ArrayLike with {} numbers",
+        len
+    ))
+}
+
 pub fn check_argc(cx: &mut FunctionContext, argc: usize) -> NeonResult<()> {
     match cx.len() >= argc {
         true => Ok(()),
@@ -890,7 +942,7 @@ pub fn path2d_arg<'a>(
 // Filters
 //
 
-use crate::filter::{FilterQuality, FilterSpec};
+use crate::filter::{FilterSpec, SamplingQuality};
 
 pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<(String, Vec<FilterSpec>)> {
     let arg = cx.argument::<JsObject>(idx)?;
@@ -926,21 +978,21 @@ pub fn filter_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<(String, V
     Ok((canonical, filters))
 }
 
-pub fn to_filter_quality(mode_name: &str) -> Option<FilterQuality> {
+pub fn to_filter_quality(mode_name: &str) -> Option<SamplingQuality> {
     let mode = match mode_name.to_lowercase().as_str() {
-        "low" => FilterQuality::Low,
-        "medium" => FilterQuality::Medium,
-        "high" => FilterQuality::High,
+        "low" => SamplingQuality::Low,
+        "medium" => SamplingQuality::Medium,
+        "high" => SamplingQuality::High,
         _ => return None,
     };
     Some(mode)
 }
 
-pub fn from_filter_quality(mode: FilterQuality) -> String {
+pub fn from_filter_quality(mode: SamplingQuality) -> String {
     match mode {
-        FilterQuality::Low => "low",
-        FilterQuality::Medium => "medium",
-        FilterQuality::High => "high",
+        SamplingQuality::Low => "low",
+        SamplingQuality::Medium => "medium",
+        SamplingQuality::High => "high",
         _ => "low",
     }
     .to_string()

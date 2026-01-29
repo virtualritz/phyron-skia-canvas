@@ -592,6 +592,135 @@ declare var CanvasGradient: {
 export class CanvasTexture {}
 
 //
+// ColorFilter & ImageFilter
+//
+
+/** 4x5 row-major color matrix (20 elements) */
+export type ColorMatrix = Float32Array | ArrayLike<number>;
+
+/**
+ * ColorFilter for color transformations.
+ * Mirrors CanvasKit.ColorFilter API.
+ *
+ * @remarks
+ * - Matrices operate in the canvas's working color space (sRGB, P3, or linear)
+ * - Filters are immutable and safe to reuse across draws
+ * - Input arrays are copied - safe to mutate after creation
+ */
+export class ColorFilter {
+  private constructor();
+
+  /**
+   * Create ColorFilter from 4x5 row-major matrix.
+   * @param matrix - 20 elements: [R_scale, R_G, R_B, R_A, R_offset, G_R, G_scale, G_B, G_A, G_offset, ...]
+   * @returns ColorFilter (never null for valid input)
+   * @throws RangeError if matrix.length !== 20
+   * @throws TypeError if matrix contains non-finite numbers
+   */
+  static MakeMatrix(matrix: ColorMatrix): ColorFilter;
+
+  /**
+   * Create ColorFilter that converts sRGB gamma to linear.
+   */
+  static MakeSRGBToLinearGamma(): ColorFilter;
+
+  /**
+   * Create ColorFilter that converts linear gamma to sRGB.
+   */
+  static MakeLinearToSRGBGamma(): ColorFilter;
+
+  /**
+   * Mark filter as deleted. Use-after-delete throws Error.
+   */
+  delete(): void;
+}
+
+/**
+ * ImageFilter for composable effects.
+ * Mirrors CanvasKit.ImageFilter API.
+ */
+export class ImageFilter {
+  private constructor();
+
+  /**
+   * Create ImageFilter from ColorFilter.
+   * @param colorFilter - The color filter to wrap
+   * @param input - Optional previous filter for chaining
+   * @returns ImageFilter or null on Skia internal failure
+   * @throws Error if colorFilter has been deleted
+   */
+  static MakeColorFilter(
+    colorFilter: ColorFilter,
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Compose two ImageFilters (outer applied after inner).
+   * @returns ImageFilter or null on Skia internal failure
+   * @throws Error if either filter has been deleted
+   */
+  static MakeCompose(
+    outer: ImageFilter,
+    inner: ImageFilter,
+  ): ImageFilter | null;
+
+  /**
+   * Create blur ImageFilter.
+   * @param sigmaX - horizontal blur radius
+   * @param sigmaY - vertical blur radius
+   * @param tileMode - edge behavior: "clamp" | "repeat" | "mirror" | "decal"
+   * @param input - optional input filter for chaining
+   */
+  static MakeBlur(
+    sigmaX: number,
+    sigmaY: number,
+    tileMode?: "clamp" | "repeat" | "mirror" | "decal",
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Create drop shadow ImageFilter.
+   * @param dx - shadow x offset
+   * @param dy - shadow y offset
+   * @param sigmaX - horizontal blur radius
+   * @param sigmaY - vertical blur radius
+   * @param color - CSS color string or [r,g,b,a] array (0-1 floats)
+   * @param input - optional input filter for chaining
+   */
+  static MakeDropShadow(
+    dx: number,
+    dy: number,
+    sigmaX: number,
+    sigmaY: number,
+    color: string | [number, number, number, number],
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Create drop shadow ImageFilter (shadow only, no source image).
+   * @param dx - shadow x offset
+   * @param dy - shadow y offset
+   * @param sigmaX - horizontal blur radius
+   * @param sigmaY - vertical blur radius
+   * @param color - CSS color string or [r,g,b,a] array (0-1 floats)
+   * @param input - optional input filter for chaining
+   */
+  static MakeDropShadowOnly(
+    dx: number,
+    dy: number,
+    sigmaX: number,
+    sigmaY: number,
+    color: string | [number, number, number, number],
+    input?: ImageFilter | null,
+  ): ImageFilter | null;
+
+  /**
+   * Mark filter as deleted. Use-after-delete throws Error.
+   */
+  delete(): void;
+}
+
+//
 // Context
 //
 
@@ -1108,6 +1237,12 @@ export interface CanvasRenderingContext2D
   // add optional maxWidth to work in conjunction with textWrap
   measureText(text: string, maxWidth?: number): TextMetrics;
   outlineText(text: string, maxWidth?: number): Path2D;
+
+  // Skia filter properties (CanvasKit parity)
+  /** Color filter applied during drawing. Set null to disable. */
+  colorFilter: ColorFilter | null;
+  /** Image filter applied during drawing. Set null to disable. */
+  imageFilter: ImageFilter | null;
 }
 
 //

@@ -339,7 +339,7 @@ impl Filter {
 }
 
 #[derive(Copy, Clone)]
-pub enum FilterQuality {
+pub enum SamplingQuality {
     None,
     Low,
     Medium,
@@ -347,23 +347,23 @@ pub enum FilterQuality {
 }
 
 #[derive(Copy, Clone)]
-pub struct ImageFilter {
+pub struct SamplingFilter {
     pub smoothing: bool,
-    pub quality: FilterQuality,
+    pub quality: SamplingQuality,
 }
 
-impl ImageFilter {
+impl SamplingFilter {
     pub fn sampling(&self) -> SamplingOptions {
         let quality = if self.smoothing {
             self.quality
         } else {
-            FilterQuality::None
+            SamplingQuality::None
         };
         match quality {
-            FilterQuality::None => SamplingOptions::new(FilterMode::Nearest, MipmapMode::None),
-            FilterQuality::Low => SamplingOptions::new(FilterMode::Linear, MipmapMode::Nearest),
-            FilterQuality::Medium => SamplingOptions::new(FilterMode::Linear, MipmapMode::Linear),
-            FilterQuality::High => SamplingOptions::new(FilterMode::Linear, MipmapMode::Linear),
+            SamplingQuality::None => SamplingOptions::new(FilterMode::Nearest, MipmapMode::None),
+            SamplingQuality::Low => SamplingOptions::new(FilterMode::Linear, MipmapMode::Nearest),
+            SamplingQuality::Medium => SamplingOptions::new(FilterMode::Linear, MipmapMode::Linear),
+            SamplingQuality::High => SamplingOptions::new(FilterMode::Linear, MipmapMode::Linear),
         }
     }
 }
