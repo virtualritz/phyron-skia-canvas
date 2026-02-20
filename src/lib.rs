@@ -92,6 +92,22 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("CanvasGradient_conic", gradient::conic)?;
     cx.export_function("CanvasGradient_addColorStop", gradient::addColorStop)?;
     cx.export_function("CanvasGradient_repr", gradient::repr)?;
+    cx.export_function(
+        "CanvasGradient_get_interpolation",
+        gradient::get_interpolation,
+    )?;
+    cx.export_function(
+        "CanvasGradient_set_interpolation",
+        gradient::set_interpolation,
+    )?;
+    cx.export_function(
+        "CanvasGradient_get_hueInterpolation",
+        gradient::get_hueInterpolation,
+    )?;
+    cx.export_function(
+        "CanvasGradient_set_hueInterpolation",
+        gradient::set_hueInterpolation,
+    )?;
 
     // -- CanvasPattern
     // -----------------------------------------------------------------------------

@@ -568,6 +568,20 @@ export class CanvasPattern {
   ): void;
 }
 
+/** Color space for gradient interpolation */
+type GradientColorSpace =
+  | "srgb"
+  | "srgb-linear"
+  | "lab"
+  | "oklab"
+  | "oklch"
+  | "lch"
+  | "hsl"
+  | "hwb";
+
+/** Hue interpolation method for cylindrical color spaces (oklch, lch, hsl, hwb) */
+type HueInterpolation = "shorter" | "longer" | "increasing" | "decreasing";
+
 /**
  * An opaque object describing a gradient. It is returned by the methods CanvasRenderingContext2D.createLinearGradient() or CanvasRenderingContext2D.createRadialGradient().
  *
@@ -582,6 +596,12 @@ interface CanvasGradient {
    * [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasGradient/addColorStop)
    */
   addColorStop(offset: number, color: string): void;
+
+  /** Color space for gradient interpolation. Default: "srgb" */
+  interpolation: GradientColorSpace;
+
+  /** Hue direction for cylindrical spaces (oklch, lch, hsl, hwb). Default: "shorter" */
+  hueInterpolation: HueInterpolation;
 }
 
 declare var CanvasGradient: {

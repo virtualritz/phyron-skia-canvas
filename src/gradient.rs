@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 use neon::prelude::*;
 use skia_safe::{
-    Color, Matrix, Point, Shader, TileMode, gradient_shader,
-    gradient_shader::GradientShaderColors::Colors,
+    Color4f, Matrix, Point, Shader, TileMode,
+    gradient_shader::{self, interpolation, Interpolation},
 };
 use std::{cell::RefCell, rc::Rc};
 
@@ -13,7 +13,7 @@ enum Gradient {
         start: Point,
         end: Point,
         stops: Vec<f32>,
-        colors: Vec<Color>,
+        colors: Vec<Color4f>,
     },
     Radial {
         start_point: Point,
@@ -21,13 +21,13 @@ enum Gradient {
         end_point: Point,
         end_radius: f32,
         stops: Vec<f32>,
-        colors: Vec<Color>,
+        colors: Vec<Color4f>,
     },
     Conic {
         center: Point,
         angle: f32,
         stops: Vec<f32>,
-        colors: Vec<Color>,
+        colors: Vec<Color4f>,
     },
 }
 
@@ -40,7 +40,7 @@ impl Gradient {
         }
     }
 
-    fn get_colors(&self) -> &Vec<Color> {
+    fn get_colors(&self) -> &Vec<Color4f> {
         match self {
             Gradient::Linear { colors, .. } => colors,
             Gradient::Radial { colors, .. } => colors,
@@ -48,7 +48,7 @@ impl Gradient {
         }
     }
 
-    fn add_stop(&mut self, offset: f32, color: Color) {
+    fn add_stop(&mut self, offset: f32, color: Color4f) {
         let stops = self.get_stops();
 
         // insert the new entries at the right index to keep the vectors sorted
@@ -78,22 +78,30 @@ impl Finalize for CanvasGradient {}
 #[derive(Clone)]
 pub struct CanvasGradient {
     gradient: Rc<RefCell<Gradient>>,
+    color_space: interpolation::ColorSpace,
+    hue_method: interpolation::HueMethod,
 }
 
 impl CanvasGradient {
     pub fn shader(&self) -> Option<Shader> {
+        let interp = Interpolation {
+            in_premul: interpolation::InPremul::No,
+            color_space: self.color_space,
+            hue_method: self.hue_method,
+        };
+
         match &*self.gradient.borrow() {
             Gradient::Linear {
                 start,
                 end,
                 stops,
                 colors,
-            } => gradient_shader::linear(
+            } => gradient_shader::linear_with_interpolation(
                 (*start, *end),
-                Colors(colors),
+                (colors.as_slice(), None),
                 Some(stops.as_slice()),
                 TileMode::Clamp,
-                None,
+                interp,
                 None,
             ),
             Gradient::Radial {
@@ -103,15 +111,13 @@ impl CanvasGradient {
                 end_radius,
                 stops,
                 colors,
-            } => gradient_shader::two_point_conical(
-                *start_point,
-                *start_radius,
-                *end_point,
-                *end_radius,
-                Colors(colors),
+            } => gradient_shader::two_point_conical_with_interpolation(
+                (*start_point, *start_radius),
+                (*end_point, *end_radius),
+                (colors.as_slice(), None),
                 Some(stops.as_slice()),
                 TileMode::Clamp,
-                None,
+                interp,
                 None,
             ),
             Gradient::Conic {
@@ -127,27 +133,26 @@ impl CanvasGradient {
                     .pre_rotate(*angle, None)
                     .pre_translate((-x, -y));
 
-                gradient_shader::sweep(
+                gradient_shader::sweep_with_interpolation(
                     *center,
-                    Colors(colors),
+                    (colors.as_slice(), None),
                     Some(stops.as_slice()),
                     TileMode::Clamp,
-                    None,           // angles
-                    None,           // flags
-                    Some(&rotated), // local_matrix
+                    None,
+                    interp,
+                    Some(&rotated),
                 )
             }
         }
     }
 
-    pub fn add_color_stop(&mut self, offset: f32, color: Color) {
+    pub fn add_color_stop(&mut self, offset: f32, color: Color4f) {
         self.gradient.borrow_mut().add_stop(offset, color);
     }
 
     pub fn is_opaque(&self) -> bool {
-        // true if all colors are 100% opaque
         let gradient = self.gradient.borrow();
-        !gradient.get_colors().iter().any(|c| c.a() < 255)
+        !gradient.get_colors().iter().any(|c| c.a < 1.0)
     }
 }
 
@@ -170,6 +175,8 @@ pub fn linear(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
     };
     let canvas_gradient = CanvasGradient {
         gradient: Rc::new(RefCell::new(ramp)),
+        color_space: interpolation::ColorSpace::Destination,
+        hue_method: interpolation::HueMethod::Shorter,
     };
     let this = RefCell::new(canvas_gradient);
     Ok(cx.boxed(this))
@@ -193,6 +200,8 @@ pub fn radial(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
     };
     let canvas_gradient = CanvasGradient {
         gradient: Rc::new(RefCell::new(bloom)),
+        color_space: interpolation::ColorSpace::Destination,
+        hue_method: interpolation::HueMethod::Shorter,
     };
     let this = RefCell::new(canvas_gradient);
     Ok(cx.boxed(this))
@@ -212,6 +221,8 @@ pub fn conic(mut cx: FunctionContext) -> JsResult<BoxedCanvasGradient> {
     };
     let canvas_gradient = CanvasGradient {
         gradient: Rc::new(RefCell::new(sweep)),
+        color_space: interpolation::ColorSpace::Destination,
+        hue_method: interpolation::HueMethod::Shorter,
     };
     let this = RefCell::new(canvas_gradient);
     Ok(cx.boxed(this))
@@ -227,7 +238,8 @@ pub fn addColorStop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
     }
 
     if let Some(color) = opt_color_arg(&mut cx, 2) {
-        this.add_color_stop(offset, color);
+        let color4f: Color4f = color.into();
+        this.add_color_stop(offset, color4f);
     } else {
         return cx.throw_type_error(match cx.len() {
             3 => "Could not be parsed as a color",
@@ -250,4 +262,95 @@ pub fn repr(mut cx: FunctionContext) -> JsResult<JsString> {
     };
 
     Ok(cx.string(style))
+}
+
+//
+// -- Interpolation color space
+// --------------------------------------------------------------------------
+//
+
+fn color_space_to_str(cs: interpolation::ColorSpace) -> &'static str {
+    use interpolation::ColorSpace;
+    match cs {
+        ColorSpace::SRGBLinear => "srgb-linear",
+        ColorSpace::Lab => "lab",
+        ColorSpace::OKLab => "oklab",
+        ColorSpace::OKLCH => "oklch",
+        ColorSpace::LCH => "lch",
+        ColorSpace::HSL => "hsl",
+        ColorSpace::HWB => "hwb",
+        _ => "srgb",
+    }
+}
+
+fn str_to_color_space(s: &str) -> Option<interpolation::ColorSpace> {
+    use interpolation::ColorSpace;
+    match s {
+        "srgb" => Some(ColorSpace::Destination),
+        "srgb-linear" => Some(ColorSpace::SRGBLinear),
+        "lab" => Some(ColorSpace::Lab),
+        "oklab" => Some(ColorSpace::OKLab),
+        "oklch" => Some(ColorSpace::OKLCH),
+        "lch" => Some(ColorSpace::LCH),
+        "hsl" => Some(ColorSpace::HSL),
+        "hwb" => Some(ColorSpace::HWB),
+        _ => None,
+    }
+}
+
+fn hue_method_to_str(hm: interpolation::HueMethod) -> &'static str {
+    use interpolation::HueMethod;
+    match hm {
+        HueMethod::Shorter => "shorter",
+        HueMethod::Longer => "longer",
+        HueMethod::Increasing => "increasing",
+        HueMethod::Decreasing => "decreasing",
+    }
+}
+
+fn str_to_hue_method(s: &str) -> Option<interpolation::HueMethod> {
+    use interpolation::HueMethod;
+    match s {
+        "shorter" => Some(HueMethod::Shorter),
+        "longer" => Some(HueMethod::Longer),
+        "increasing" => Some(HueMethod::Increasing),
+        "decreasing" => Some(HueMethod::Decreasing),
+        _ => None,
+    }
+}
+
+pub fn get_interpolation(mut cx: FunctionContext) -> JsResult<JsString> {
+    let this = cx.argument::<BoxedCanvasGradient>(0)?;
+    let this = this.borrow();
+    Ok(cx.string(color_space_to_str(this.color_space)))
+}
+
+pub fn set_interpolation(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let this = cx.argument::<BoxedCanvasGradient>(0)?;
+    let mut this = this.borrow_mut();
+    let value = string_arg(&mut cx, 1, "interpolation")?;
+
+    if let Some(cs) = str_to_color_space(&value) {
+        this.color_space = cs;
+    }
+
+    Ok(cx.undefined())
+}
+
+pub fn get_hueInterpolation(mut cx: FunctionContext) -> JsResult<JsString> {
+    let this = cx.argument::<BoxedCanvasGradient>(0)?;
+    let this = this.borrow();
+    Ok(cx.string(hue_method_to_str(this.hue_method)))
+}
+
+pub fn set_hueInterpolation(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let this = cx.argument::<BoxedCanvasGradient>(0)?;
+    let mut this = this.borrow_mut();
+    let value = string_arg(&mut cx, 1, "hueInterpolation")?;
+
+    if let Some(hm) = str_to_hue_method(&value) {
+        this.hue_method = hm;
+    }
+
+    Ok(cx.undefined())
 }
