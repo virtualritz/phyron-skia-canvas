@@ -2,8 +2,9 @@
 use neon::prelude::*;
 use skia_safe::{
     BlendMode, Canvas as SkCanvas, ClipOp, Color, Color4f, ColorFilter as SkColorFilter,
-    ColorSpace, Contains, IRect, Image, ImageFilter as SkImageFilter, Paint, PaintStyle, Path,
-    PathBuilder, PathFillType, PathOp, Picture, PictureRecorder, Point, Rect, Size,
+    ColorSpace, Contains, FourByteTag, IRect, Image, ImageFilter as SkImageFilter, Paint,
+    PaintStyle, Path, PathBuilder, PathFillType, PathOp, Picture, PictureRecorder, Point, Rect,
+    Size,
     canvas::SrcRectConstraint::Strict,
     dash_path_effect,
     font_style::{FontStyle, Width},
@@ -84,6 +85,8 @@ pub struct State {
     text_decoration: DecorationStyle,
     text_wrap: bool,
     line_height: Option<f32>,
+    pub variations: Vec<(FourByteTag, f32)>,
+    pub font_variation_settings: String,
 }
 
 impl Default for State {
@@ -140,12 +143,16 @@ impl Default for State {
             text_decoration: DecorationStyle::default(),
             text_wrap: false,
             line_height: None,
+            variations: vec![],
+            font_variation_settings: "normal".to_string(),
         }
     }
 }
 
 impl State {
-    pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, Baseline, bool) {
+    pub fn typography(
+        &self,
+    ) -> (TextStyle, ParagraphStyle, DecorationStyle, Baseline, bool) {
         let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
         char_style.set_word_spacing(self.word_spacing.in_px(char_style.font_size()));
         char_style.set_letter_spacing(self.letter_spacing.in_px(char_style.font_size()));

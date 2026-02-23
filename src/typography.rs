@@ -34,9 +34,10 @@ pub struct Typesetter {
 impl Typesetter {
     pub fn new(state: &State, text: &str, width: Option<f32>) -> Self {
         let (char_style, graf_style, text_decoration, baseline, text_wrap) = state.typography();
+        let variations = &state.variations;
         let typefaces = FontLibrary::with_shared(|lib| {
             lib.set_hinting(graf_style.hinting_is_on())
-                .fonts_for_style(&char_style)
+                .fonts_for_style(&char_style, variations)
         });
         let width = width.unwrap_or(GALLEY);
         let text = match text_wrap {

@@ -3,10 +3,11 @@
 //
 #![allow(non_snake_case)]
 use neon::prelude::*;
+use neon::types::buffer::TypedArray;
 use std::{cell::RefCell, collections::HashMap, fs, path::Path, sync::OnceLock};
 
 use skia_safe::{
-    FontArguments, FontMgr, Typeface,
+    FontArguments, FontMgr, FourByteTag, Typeface,
     font_arguments::{VariationPosition, variation_position::Coordinate},
     font_style::{FontStyle, Slant},
     textlayout::{FontCollection, TextStyle, TypefaceFontProvider},
@@ -33,18 +34,24 @@ pub struct CollectionKey {
     families: String,
     weight: i32,
     slant: Slant,
+    variations: Vec<(u32, i32)>,
 }
 
 impl CollectionKey {
-    pub fn new(style: &TextStyle) -> Self {
+    pub fn new(style: &TextStyle, variations: &[(FourByteTag, f32)]) -> Self {
         let families = style.font_families();
         let families = families.iter().collect::<Vec<&str>>().join(", ");
         let weight = *style.font_style().weight();
         let slant = style.font_style().slant();
+        let variations = variations
+            .iter()
+            .map(|(tag, val)| (**tag, (*val * 1000.0) as i32))
+            .collect();
         CollectionKey {
             families,
             weight,
             slant,
+            variations,
         }
     }
 }
@@ -96,7 +103,7 @@ impl FontLibrary {
         })
     }
 
-    fn font_collection(&mut self) -> FontCollection {
+    pub fn font_collection(&mut self) -> FontCollection {
         // lazily initialize font collection on first actual use
         if self.collection.is_none() {
             self.collection = Some(self.new_font_collection());
@@ -376,7 +383,11 @@ impl FontLibrary {
         self
     }
 
-    pub fn fonts_for_style(&mut self, style: &TextStyle) -> FontCollection {
+    pub fn fonts_for_style(
+        &mut self,
+        style: &TextStyle,
+        variations: &[(FourByteTag, f32)],
+    ) -> FontCollection {
         let families = style.font_families();
         let families: Vec<&str> = families.iter().collect();
         let matches = self
@@ -392,10 +403,14 @@ impl FontLibrary {
         {
             // memoize the generation of FontCollections for instanced variable
             // fonts
-            let key = CollectionKey::new(style);
+            let key = CollectionKey::new(style, variations);
             if let Some(collection) = self.collection_cache.get(&key) {
                 return collection.clone();
             }
+
+            // build a set of explicitly-set axis tags for quick lookup
+            let explicit_tags: Vec<u32> =
+                variations.iter().map(|(tag, _)| **tag).collect();
 
             // collect any instantiated variable fonts in a TFP to be used as
             // the 'dynamic' font mgr (which is searched before the
@@ -403,53 +418,56 @@ impl FontLibrary {
             let mut dynamic = TypefaceFontProvider::new();
 
             for font in matches.into_iter() {
-                font.variation_design_parameters()
-                    .and_then(|params| {
-                        // find the weight axis
-                        params.into_iter().find(|param| {
-                            let chars =
-                                vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
-                            let tag = String::from_utf8(chars).unwrap();
-                            tag == "wght"
-                        })
-                    })
-                    .and_then(|param| {
-                        // create an instance at the proper 'wght' for this
-                        // weight NB: currently setting
-                        // the value to *one less* than what was requested
-                        //     to work around weird Skia behavior that returns
-                        // something nonlinearly
-                        //     weighted in many cases (but not for ±1 of that
-                        // value). This makes it so
-                        //     that n × 100 values will render correctly (and
-                        // the bug will manifest at
-                        //     n × 100 + 1 instead)
-                        let weight = *style.font_style().weight() - 1;
-                        let value = (weight as f32).max(param.min).min(param.max);
-                        let coords = [Coordinate {
-                            axis: param.tag,
-                            value,
-                        }];
+                if let Some(params) = font.variation_design_parameters() {
+                    // build coordinates from explicit variations + auto wght
+                    let mut coords: Vec<Coordinate> = vec![];
+
+                    // add explicit variations first
+                    for (tag, value) in variations {
+                        // find the matching axis parameter to clamp values
+                        if let Some(param) = params
+                            .iter()
+                            .find(|p| *p.tag == **tag)
+                        {
+                            coords.push(Coordinate {
+                                axis: param.tag,
+                                value: value.max(param.min).min(param.max),
+                            });
+                        }
+                    }
+
+                    // auto-add wght if not explicitly set
+                    let wght_tag = FourByteTag::from_chars('w', 'g', 'h', 't');
+                    if !explicit_tags.contains(&*wght_tag) {
+                        if let Some(param) =
+                            params.iter().find(|p| *p.tag == *wght_tag)
+                        {
+                            let weight = *style.font_style().weight() - 1;
+                            let value = (weight as f32).max(param.min).min(param.max);
+                            coords.push(Coordinate {
+                                axis: param.tag,
+                                value,
+                            });
+                        }
+                    }
+
+                    if !coords.is_empty() {
                         let v_pos = VariationPosition {
                             coordinates: &coords,
                         };
                         let args = FontArguments::new().set_variation_design_position(v_pos);
-                        font.clone_with_arguments(&args)
-                    })
-                    .map(|face| {
-                        // maintain the user-defined family alias (if
-                        // applicable)
-                        let alias = self.fonts.iter().find_map(|(orig, alias)| {
-                            if Typeface::equal(&font, orig) {
-                                alias.clone()
-                            } else {
-                                None
-                            }
-                        });
-
-                        // add the font to the dynamic font mgr
-                        dynamic.register_typeface(face, alias.as_deref())
-                    });
+                        if let Some(face) = font.clone_with_arguments(&args) {
+                            let alias = self.fonts.iter().find_map(|(orig, alias)| {
+                                if Typeface::equal(&font, orig) {
+                                    alias.clone()
+                                } else {
+                                    None
+                                }
+                            });
+                            dynamic.register_typeface(face, alias.as_deref());
+                        }
+                    }
+                }
             }
 
             let mut collection = self.new_font_collection();
@@ -552,6 +570,31 @@ pub fn addFamily(mut cx: FunctionContext) -> JsResult<JsValue> {
             }
             None => {
                 return cx.throw_error(format!("Could not decode font data in {}", path.display()));
+            }
+        }
+    }
+
+    Ok(results.upcast())
+}
+
+pub fn addFamilyFromData(mut cx: FunctionContext) -> JsResult<JsValue> {
+    let alias = opt_string_arg(&mut cx, 1);
+    let buffers = cx.argument::<JsArray>(2)?.to_vec(&mut cx)?;
+    let results = JsArray::new(&mut cx, buffers.len());
+
+    for (i, buf_val) in buffers.iter().enumerate() {
+        let buf = buf_val.downcast_or_throw::<JsBuffer, _>(&mut cx)?;
+        let bytes = buf.as_slice(&cx).to_vec();
+        let typeface = FontLibrary::with_shared(|lib| lib.mgr.new_from_data(&bytes, None));
+
+        match typeface {
+            Some(font) => {
+                let details = typeface_details(&mut cx, "<buffer>", &font, alias.clone())?;
+                results.set(&mut cx, i as u32, details)?;
+                FontLibrary::with_shared(|lib| lib.add_typeface(font, alias.clone()));
+            }
+            None => {
+                return cx.throw_error("Could not decode font data from buffer");
             }
         }
     }

@@ -13,6 +13,7 @@ mod gradient;
 mod gui;
 mod image;
 mod image_filter;
+mod paragraph;
 mod path;
 mod pattern;
 mod texture;
@@ -219,7 +220,43 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("FontLibrary_has", font_library::has)?;
     cx.export_function("FontLibrary_family", font_library::family)?;
     cx.export_function("FontLibrary_addFamily", font_library::addFamily)?;
+    cx.export_function("FontLibrary_addFamilyFromData", font_library::addFamilyFromData)?;
     cx.export_function("FontLibrary_reset", font_library::reset)?;
+
+    // -- ParagraphBuilder
+    // --------------------------------------------------------------------------
+
+    cx.export_function("ParagraphBuilder_new", paragraph::new)?;
+    cx.export_function("ParagraphBuilder_pushStyle", paragraph::pushStyle)?;
+    cx.export_function("ParagraphBuilder_pop", paragraph::pop)?;
+    cx.export_function("ParagraphBuilder_addText", paragraph::addText)?;
+    cx.export_function("ParagraphBuilder_addPlaceholder", paragraph::addPlaceholder)?;
+    cx.export_function("ParagraphBuilder_build", paragraph::build)?;
+
+    // -- Paragraph
+    // ------------------------------------------------------------------------------
+
+    cx.export_function("Paragraph_layout", paragraph::layout)?;
+    cx.export_function("Paragraph_paint", paragraph::paint)?;
+    cx.export_function("Paragraph_getHeight", paragraph::getHeight)?;
+    cx.export_function("Paragraph_getLongestLine", paragraph::getLongestLine)?;
+    cx.export_function("Paragraph_getMaxWidth", paragraph::getMaxWidth)?;
+    cx.export_function("Paragraph_getMaxIntrinsicWidth", paragraph::getMaxIntrinsicWidth)?;
+    cx.export_function("Paragraph_getMinIntrinsicWidth", paragraph::getMinIntrinsicWidth)?;
+    cx.export_function(
+        "Paragraph_getAlphabeticBaseline",
+        paragraph::getAlphabeticBaseline,
+    )?;
+    cx.export_function(
+        "Paragraph_getIdeographicBaseline",
+        paragraph::getIdeographicBaseline,
+    )?;
+    cx.export_function("Paragraph_getLineMetrics", paragraph::getLineMetrics)?;
+    cx.export_function(
+        "Paragraph_getGlyphPositionAtCoordinate",
+        paragraph::getGlyphPositionAtCoordinate,
+    )?;
+    cx.export_function("Paragraph_getRectsForRange", paragraph::getRectsForRange)?;
 
     // -- Backend (module-level)
     // --------------------------------------------------------------------
@@ -450,6 +487,14 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
         "CanvasRenderingContext2D_set_textDecoration",
         ctx::set_textDecoration,
     )?;
+    cx.export_function(
+        "CanvasRenderingContext2D_get_fontVariationSettings",
+        ctx::get_fontVariationSettings,
+    )?;
+    cx.export_function(
+        "CanvasRenderingContext2D_set_fontVariationSettings",
+        ctx::set_fontVariationSettings,
+    )?;
 
     // effects
     cx.export_function(
@@ -519,6 +564,12 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function(
         "CanvasRenderingContext2D_set_skiaImageFilter",
         ctx::set_skiaImageFilter,
+    )?;
+
+    // drawParagraph
+    cx.export_function(
+        "CanvasRenderingContext2D_drawParagraph",
+        paragraph::drawParagraph,
     )?;
 
     // -- Window -----------------------------------------------------------------------------------

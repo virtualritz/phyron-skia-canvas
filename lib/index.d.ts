@@ -1655,6 +1655,7 @@ export interface CanvasRenderingContext2D
   /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/CanvasRenderingContext2D/canvas) */
   readonly canvas: Canvas;
   fontVariant: FontVariantSetting;
+  fontVariationSettings: string;
   fontHinting: boolean;
   textWrap: boolean;
   textDecoration: string;
@@ -1683,6 +1684,8 @@ export interface CanvasRenderingContext2D
   colorFilter: ColorFilter | null;
   /** Image filter applied during drawing. Set null to disable. */
   imageFilter: ImageFilter | null;
+
+  drawParagraph(paragraph: Paragraph, x: number, y: number): void;
 }
 
 //
@@ -1877,6 +1880,8 @@ interface FontLibrary {
   has(familyName: string): boolean;
 
   use(familyName: string, fontPaths?: string | readonly string[]): Font[];
+  use(familyName: string, fontData: Buffer | ArrayBuffer): Font[];
+  use(familyName: string, fontData: readonly (Buffer | ArrayBuffer)[]): Font[];
   use(fontPaths: readonly string[]): Font[];
   use(
     families: Record<string, readonly string[] | string>,
@@ -1886,6 +1891,118 @@ interface FontLibrary {
 }
 
 export const FontLibrary: FontLibrary;
+
+export const TextDecoration: {
+  readonly NoDecoration: 0x0;
+  readonly Underline: 0x1;
+  readonly Overline: 0x2;
+  readonly LineThrough: 0x4;
+};
+
+export const TextDecorationStyle: {
+  readonly Solid: 0;
+  readonly Double: 1;
+  readonly Dotted: 2;
+  readonly Dashed: 3;
+  readonly Wavy: 4;
+};
+
+//
+// ParagraphBuilder & Paragraph
+//
+
+export interface TextShadowInput {
+  color?: string;
+  offset?: [number, number];
+  blurRadius?: number;
+}
+
+export interface TextStyleInput {
+  fontSize?: number;
+  fontFamilies?: string[];
+  color?: string;
+  foregroundColor?: string;
+  backgroundColor?: string;
+  fontStyle?: { weight?: number; width?: number; slant?: number };
+  letterSpacing?: number;
+  wordSpacing?: number;
+  heightMultiplier?: number;
+  decoration?: number;
+  decorationStyle?: number;
+  decorationColor?: string;
+  decorationThickness?: number;
+  shadows?: TextShadowInput[];
+}
+
+export interface ParagraphStyleInput {
+  textAlign?: string;
+  textDirection?: string;
+  maxLines?: number;
+  ellipsis?: string;
+  textStyle?: TextStyleInput;
+}
+
+export interface GlyphPosition {
+  pos: number;
+  affinity: number;
+}
+
+export interface TextBox {
+  rect: [number, number, number, number];
+  direction: number;
+}
+
+export interface LineMetrics {
+  startIndex: number;
+  endIndex: number;
+  endExcludingWhitespaces: number;
+  endIncludingNewline: number;
+  isHardBreak: boolean;
+  ascent: number;
+  descent: number;
+  height: number;
+  width: number;
+  left: number;
+  baseline: number;
+  lineNumber: number;
+}
+
+export class ParagraphBuilder {
+  static Make(
+    style?: ParagraphStyleInput,
+    fontLibrary?: FontLibrary,
+  ): ParagraphBuilder;
+  pushStyle(style: TextStyleInput): this;
+  pop(): this;
+  addText(text: string): this;
+  addPlaceholder(
+    width: number,
+    height: number,
+    align?: number,
+    baseline?: number,
+    offset?: number,
+  ): this;
+  build(): Paragraph;
+}
+
+export class Paragraph {
+  layout(width: number): void;
+  getHeight(): number;
+  getLongestLine(): number;
+  getMaxWidth(): number;
+  getMaxIntrinsicWidth(): number;
+  getMinIntrinsicWidth(): number;
+  getAlphabeticBaseline(): number;
+  getIdeographicBaseline(): number;
+  getGlyphPositionAtCoordinate(x: number, y: number): GlyphPosition;
+  getRectsForRange(
+    start: number,
+    end: number,
+    hStyle?: number,
+    wStyle?: number,
+  ): TextBox[];
+  getLineMetrics(): LineMetrics[];
+}
 
 //
 // Window & App

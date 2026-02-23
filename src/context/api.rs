@@ -22,6 +22,7 @@ use crate::{
     },
     utils::*,
 };
+use skia_safe::FourByteTag;
 
 //
 // The js interface for the Context2D struct
@@ -1276,6 +1277,49 @@ pub fn set_textDecoration(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         this.state.text_decoration = deco_style;
     }
 
+    Ok(cx.undefined())
+}
+
+pub fn get_fontVariationSettings(mut cx: FunctionContext) -> JsResult<JsString> {
+    let this = cx.argument::<BoxedContext2D>(0)?;
+    let this = this.borrow();
+    Ok(cx.string(this.state.font_variation_settings.clone()))
+}
+
+pub fn set_fontVariationSettings(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let this = cx.argument::<BoxedContext2D>(0)?;
+    let mut this = this.borrow_mut();
+    let arg = cx.argument::<JsObject>(1)?;
+
+    let keys = arg.get_own_property_names(&mut cx)?.to_vec(&mut cx)?;
+    let mut variations: Vec<(FourByteTag, f32)> = vec![];
+    let mut css_parts: Vec<String> = vec![];
+
+    for key_val in keys.iter() {
+        let key = key_val
+            .downcast_or_throw::<JsString, _>(&mut cx)?
+            .value(&mut cx);
+        if key.len() == 4 {
+            let val: Handle<JsNumber> = arg.get(&mut cx, key.as_str())?;
+            let value = val.value(&mut cx) as f32;
+            let bytes = key.as_bytes();
+            let tag = FourByteTag::from_chars(
+                bytes[0] as char,
+                bytes[1] as char,
+                bytes[2] as char,
+                bytes[3] as char,
+            );
+            variations.push((tag, value));
+            css_parts.push(format!("\"{}\" {}", key, value));
+        }
+    }
+
+    if variations.is_empty() {
+        this.state.font_variation_settings = "normal".to_string();
+    } else {
+        this.state.font_variation_settings = css_parts.join(", ");
+    }
+    this.state.variations = variations;
     Ok(cx.undefined())
 }
 

@@ -1,0 +1,532 @@
+//
+// ParagraphBuilder & Paragraph wrappers for CanvasKit parity
+//
+#![allow(non_snake_case)]
+use neon::prelude::*;
+use std::cell::RefCell;
+
+use skia_safe::{
+    Color, Paint, Point,
+    font_style::{FontStyle, Slant, Weight, Width},
+    textlayout::{
+        FontCollection, Paragraph as SkParagraph, ParagraphBuilder as SkParagraphBuilder,
+        ParagraphStyle, PlaceholderStyle, RectHeightStyle, RectWidthStyle, TextAlign, TextDecoration,
+        TextDecorationMode, TextDecorationStyle, TextDirection, TextShadow, TextStyle,
+    },
+};
+
+use crate::{font_library::FontLibrary, utils::*};
+
+//
+// Boxed wrapper types
+//
+
+pub struct ParagraphBuilderWrap {
+    builder: Option<SkParagraphBuilder>,
+    _collection: FontCollection,
+}
+
+impl Finalize for ParagraphBuilderWrap {}
+pub type BoxedParagraphBuilder = JsBox<RefCell<ParagraphBuilderWrap>>;
+
+pub struct ParagraphWrap {
+    pub paragraph: SkParagraph,
+}
+
+impl Finalize for ParagraphWrap {}
+pub type BoxedParagraph = JsBox<RefCell<ParagraphWrap>>;
+
+//
+// Style parsing helpers
+//
+
+fn parse_text_style(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonResult<TextStyle> {
+    let mut style = TextStyle::new();
+
+    // fontSize
+    if let Some(size) = opt_float_for_key(cx, obj, "fontSize") {
+        style.set_font_size(size);
+    }
+
+    // fontFamilies
+    if let Ok(fam_val) = obj.get::<JsValue, _, _>(cx, "fontFamilies") {
+        if let Ok(fam_arr) = fam_val.downcast::<JsArray, _>(cx) {
+            let fam_vec = fam_arr.to_vec(cx)?;
+            let families = strings_in(cx, &fam_vec);
+            style.set_font_families(&families);
+        }
+    }
+
+    // color / foregroundColor
+    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "color") {
+        if let Some(color) = color_in(cx, color_val) {
+            let mut paint = Paint::default();
+            paint.set_color(color);
+            style.set_foreground_paint(&paint);
+        }
+    }
+    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "foregroundColor") {
+        if let Some(color) = color_in(cx, color_val) {
+            let mut paint = Paint::default();
+            paint.set_color(color);
+            style.set_foreground_paint(&paint);
+        }
+    }
+
+    // backgroundColor
+    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "backgroundColor") {
+        if let Some(color) = color_in(cx, color_val) {
+            let mut paint = Paint::default();
+            paint.set_color(color);
+            style.set_background_paint(&paint);
+        }
+    }
+
+    // fontStyle: { weight, width, slant }
+    if let Ok(fs_val) = obj.get::<JsValue, _, _>(cx, "fontStyle") {
+        if let Ok(fs_obj) = fs_val.downcast::<JsObject, _>(cx) {
+            let weight = opt_float_for_key(cx, &fs_obj, "weight")
+                .map(|w| Weight::from(w as i32))
+                .unwrap_or(Weight::NORMAL);
+            let width = opt_float_for_key(cx, &fs_obj, "width")
+                .map(|w| Width::from(w as i32))
+                .unwrap_or(Width::NORMAL);
+            let slant = opt_float_for_key(cx, &fs_obj, "slant")
+                .map(|s| match s as i32 {
+                    1 => Slant::Italic,
+                    2 => Slant::Oblique,
+                    _ => Slant::Upright,
+                })
+                .unwrap_or(Slant::Upright);
+            style.set_font_style(FontStyle::new(weight, width, slant));
+        }
+    }
+
+    // letterSpacing
+    if let Some(ls) = opt_float_for_key(cx, obj, "letterSpacing") {
+        style.set_letter_spacing(ls);
+    }
+
+    // wordSpacing
+    if let Some(ws) = opt_float_for_key(cx, obj, "wordSpacing") {
+        style.set_word_spacing(ws);
+    }
+
+    // heightMultiplier
+    if let Some(hm) = opt_float_for_key(cx, obj, "heightMultiplier") {
+        style.set_height(hm);
+        style.set_height_override(true);
+    }
+
+    // decoration (bitmask)
+    if let Some(deco) = opt_float_for_key(cx, obj, "decoration") {
+        let deco_val = deco as u32;
+        let mut td = TextDecoration::NO_DECORATION;
+        if deco_val & 0x1 != 0 {
+            td |= TextDecoration::UNDERLINE;
+        }
+        if deco_val & 0x2 != 0 {
+            td |= TextDecoration::OVERLINE;
+        }
+        if deco_val & 0x4 != 0 {
+            td |= TextDecoration::LINE_THROUGH;
+        }
+        style.set_decoration_type(td);
+    }
+
+    // decorationStyle
+    if let Some(ds) = opt_float_for_key(cx, obj, "decorationStyle") {
+        style.set_decoration_style(match ds as i32 {
+            1 => TextDecorationStyle::Double,
+            2 => TextDecorationStyle::Dotted,
+            3 => TextDecorationStyle::Dashed,
+            4 => TextDecorationStyle::Wavy,
+            _ => TextDecorationStyle::Solid,
+        });
+    }
+
+    // decorationColor
+    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "decorationColor") {
+        if let Some(color) = color_in(cx, color_val) {
+            style.set_decoration_color(color);
+        }
+    }
+
+    // decorationThickness
+    if let Some(dt) = opt_float_for_key(cx, obj, "decorationThickness") {
+        style.set_decoration_thickness_multiplier(dt);
+    }
+
+    // decoration mode
+    style.set_decoration_mode(TextDecorationMode::Through);
+
+    // shadows: [{ color, offset: [dx, dy], blurRadius }]
+    if let Ok(shadows_val) = obj.get::<JsValue, _, _>(cx, "shadows") {
+        if let Ok(shadows_arr) = shadows_val.downcast::<JsArray, _>(cx) {
+            for shadow_val in shadows_arr.to_vec(cx)? {
+                if let Ok(shadow_obj) = shadow_val.downcast::<JsObject, _>(cx) {
+                    let color = obj
+                        .get::<JsValue, _, _>(cx, "color")
+                        .ok()
+                        .and_then(|v| color_in(cx, v))
+                        .unwrap_or(Color::BLACK);
+
+                    // Properly read from shadow_obj, not obj
+                    let color = shadow_obj
+                        .get::<JsValue, _, _>(cx, "color")
+                        .ok()
+                        .and_then(|v| color_in(cx, v))
+                        .unwrap_or(color);
+
+                    let mut offset = Point::new(0.0, 0.0);
+                    if let Ok(offset_val) = shadow_obj.get::<JsValue, _, _>(cx, "offset") {
+                        if let Ok(offset_arr) = offset_val.downcast::<JsArray, _>(cx) {
+                            let vals = offset_arr.to_vec(cx)?;
+                            if vals.len() >= 2 {
+                                if let (Ok(dx), Ok(dy)) = (
+                                    vals[0].downcast::<JsNumber, _>(cx),
+                                    vals[1].downcast::<JsNumber, _>(cx),
+                                ) {
+                                    offset =
+                                        Point::new(dx.value(cx) as f32, dy.value(cx) as f32);
+                                }
+                            }
+                        }
+                    }
+
+                    let blur = opt_float_for_key(cx, &shadow_obj, "blurRadius").unwrap_or(0.0);
+
+                    style.add_shadow(TextShadow::new(color, offset, blur as f64));
+                }
+            }
+        }
+    }
+
+    Ok(style)
+}
+
+fn parse_paragraph_style(
+    cx: &mut FunctionContext,
+    obj: &Handle<JsObject>,
+) -> NeonResult<ParagraphStyle> {
+    let mut style = ParagraphStyle::new();
+
+    // textAlign
+    if let Ok(align_str) = string_for_key(cx, obj, "textAlign") {
+        match align_str.to_lowercase().as_str() {
+            "left" => { style.set_text_align(TextAlign::Left); }
+            "right" => { style.set_text_align(TextAlign::Right); }
+            "center" => { style.set_text_align(TextAlign::Center); }
+            "justify" => { style.set_text_align(TextAlign::Justify); }
+            "start" => { style.set_text_align(TextAlign::Start); }
+            "end" => { style.set_text_align(TextAlign::End); }
+            _ => {}
+        }
+    }
+
+    // textDirection
+    if let Ok(dir_str) = string_for_key(cx, obj, "textDirection") {
+        match dir_str.to_lowercase().as_str() {
+            "rtl" => { style.set_text_direction(TextDirection::RTL); }
+            "ltr" => { style.set_text_direction(TextDirection::LTR); }
+            _ => {}
+        }
+    }
+
+    // maxLines
+    if let Some(max) = opt_float_for_key(cx, obj, "maxLines") {
+        style.set_max_lines(Some(max as usize));
+    }
+
+    // ellipsis
+    if let Ok(ell) = string_for_key(cx, obj, "ellipsis") {
+        if !ell.is_empty() {
+            style.set_ellipsis(ell);
+        }
+    }
+
+    // textStyle (default text style for the paragraph)
+    if let Ok(ts_val) = obj.get::<JsValue, _, _>(cx, "textStyle") {
+        if let Ok(ts_obj) = ts_val.downcast::<JsObject, _>(cx) {
+            let text_style = parse_text_style(cx, &ts_obj)?;
+            style.set_text_style(&text_style);
+        }
+    }
+
+    Ok(style)
+}
+
+//
+// ParagraphBuilder FFI functions
+//
+
+pub fn new(mut cx: FunctionContext) -> JsResult<BoxedParagraphBuilder> {
+    let style_arg = cx.argument::<JsObject>(1)?;
+    let para_style = parse_paragraph_style(&mut cx, &style_arg)?;
+
+    let collection = FontLibrary::with_shared(|lib| lib.font_collection());
+
+    let builder = SkParagraphBuilder::new(&para_style, &collection);
+
+    Ok(cx.boxed(RefCell::new(ParagraphBuilderWrap {
+        builder: Some(builder),
+        _collection: collection,
+    })))
+}
+
+pub fn pushStyle(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let this = cx.argument::<BoxedParagraphBuilder>(0)?;
+    let style_obj = cx.argument::<JsObject>(1)?;
+    let text_style = parse_text_style(&mut cx, &style_obj)?;
+
+    let mut this = this.borrow_mut();
+    if let Some(builder) = this.builder.as_mut() {
+        builder.push_style(&text_style);
+    }
+    Ok(cx.undefined())
+}
+
+pub fn pop(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let this = cx.argument::<BoxedParagraphBuilder>(0)?;
+    let mut this = this.borrow_mut();
+    if let Some(builder) = this.builder.as_mut() {
+        builder.pop();
+    }
+    Ok(cx.undefined())
+}
+
+pub fn addText(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let this = cx.argument::<BoxedParagraphBuilder>(0)?;
+    let text = string_arg(&mut cx, 1, "text")?;
+
+    let mut this = this.borrow_mut();
+    if let Some(builder) = this.builder.as_mut() {
+        builder.add_text(&text);
+    }
+    Ok(cx.undefined())
+}
+
+pub fn addPlaceholder(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let this = cx.argument::<BoxedParagraphBuilder>(0)?;
+    let width = float_arg_or_bail(&mut cx, 1, "width")?;
+    let height = float_arg_or_bail(&mut cx, 2, "height")?;
+    let _align = opt_float_arg(&mut cx, 3).unwrap_or(0.0);
+    let _baseline = opt_float_arg(&mut cx, 4).unwrap_or(0.0);
+    let offset = opt_float_arg(&mut cx, 5).unwrap_or(0.0);
+
+    // Use default alignment and baseline for simplicity
+    let placeholder = PlaceholderStyle::default();
+    let placeholder = PlaceholderStyle {
+        width,
+        height,
+        baseline_offset: offset,
+        ..placeholder
+    };
+
+    let mut this = this.borrow_mut();
+    if let Some(builder) = this.builder.as_mut() {
+        builder.add_placeholder(&placeholder);
+    }
+    Ok(cx.undefined())
+}
+
+pub fn build(mut cx: FunctionContext) -> JsResult<BoxedParagraph> {
+    let this = cx.argument::<BoxedParagraphBuilder>(0)?;
+    let mut this = this.borrow_mut();
+
+    match this.builder.take() {
+        Some(mut builder) => {
+            let paragraph = builder.build();
+            Ok(cx.boxed(RefCell::new(ParagraphWrap { paragraph })))
+        }
+        None => cx.throw_error("ParagraphBuilder has already been consumed by build()"),
+    }
+}
+
+//
+// Paragraph FFI functions
+//
+
+pub fn layout(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let this = cx.argument::<BoxedParagraph>(0)?;
+    let width = float_arg_or_bail(&mut cx, 1, "width")?;
+
+    let mut this = this.borrow_mut();
+    this.paragraph.layout(width);
+    Ok(cx.undefined())
+}
+
+pub fn paint(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    // This is handled via drawParagraph on the context side
+    cx.throw_error("Use ctx.drawParagraph() instead of Paragraph.paint()")
+}
+
+pub fn getHeight(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let this = cx.argument::<BoxedParagraph>(0)?;
+    let this = this.borrow();
+    Ok(cx.number(this.paragraph.height()))
+}
+
+pub fn getLongestLine(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let this = cx.argument::<BoxedParagraph>(0)?;
+    let this = this.borrow();
+    Ok(cx.number(this.paragraph.longest_line()))
+}
+
+pub fn getMaxWidth(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let this = cx.argument::<BoxedParagraph>(0)?;
+    let this = this.borrow();
+    Ok(cx.number(this.paragraph.max_width()))
+}
+
+pub fn getMaxIntrinsicWidth(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let this = cx.argument::<BoxedParagraph>(0)?;
+    let this = this.borrow();
+    Ok(cx.number(this.paragraph.max_intrinsic_width()))
+}
+
+pub fn getMinIntrinsicWidth(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let this = cx.argument::<BoxedParagraph>(0)?;
+    let this = this.borrow();
+    Ok(cx.number(this.paragraph.min_intrinsic_width()))
+}
+
+pub fn getAlphabeticBaseline(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let this = cx.argument::<BoxedParagraph>(0)?;
+    let this = this.borrow();
+    Ok(cx.number(this.paragraph.alphabetic_baseline()))
+}
+
+pub fn getIdeographicBaseline(mut cx: FunctionContext) -> JsResult<JsNumber> {
+    let this = cx.argument::<BoxedParagraph>(0)?;
+    let this = this.borrow();
+    Ok(cx.number(this.paragraph.ideographic_baseline()))
+}
+
+pub fn getLineMetrics(mut cx: FunctionContext) -> JsResult<JsArray> {
+    let this = cx.argument::<BoxedParagraph>(0)?;
+    let this = this.borrow();
+
+    let metrics = this.paragraph.get_line_metrics();
+    let result = JsArray::new(&mut cx, metrics.len());
+
+    for (i, m) in metrics.iter().enumerate() {
+        let obj = JsObject::new(&mut cx);
+
+        let v = cx.number(m.start_index as f64);
+        obj.set(&mut cx, "startIndex", v)?;
+        let v = cx.number(m.end_index as f64);
+        obj.set(&mut cx, "endIndex", v)?;
+        let v = cx.number(m.end_excluding_whitespaces as f64);
+        obj.set(&mut cx, "endExcludingWhitespaces", v)?;
+        let v = cx.number(m.end_including_newline as f64);
+        obj.set(&mut cx, "endIncludingNewline", v)?;
+        let v = cx.boolean(m.hard_break);
+        obj.set(&mut cx, "isHardBreak", v)?;
+        let v = cx.number(m.ascent);
+        obj.set(&mut cx, "ascent", v)?;
+        let v = cx.number(m.descent);
+        obj.set(&mut cx, "descent", v)?;
+        let v = cx.number(m.height);
+        obj.set(&mut cx, "height", v)?;
+        let v = cx.number(m.width);
+        obj.set(&mut cx, "width", v)?;
+        let v = cx.number(m.left);
+        obj.set(&mut cx, "left", v)?;
+        let v = cx.number(m.baseline);
+        obj.set(&mut cx, "baseline", v)?;
+        let v = cx.number(m.line_number as f64);
+        obj.set(&mut cx, "lineNumber", v)?;
+
+        result.set(&mut cx, i as u32, obj)?;
+    }
+
+    Ok(result)
+}
+
+pub fn getGlyphPositionAtCoordinate(mut cx: FunctionContext) -> JsResult<JsObject> {
+    let this = cx.argument::<BoxedParagraph>(0)?;
+    let x = float_arg_or_bail(&mut cx, 1, "x")?;
+    let y = float_arg_or_bail(&mut cx, 2, "y")?;
+
+    let this = this.borrow();
+    let pos = this.paragraph.get_glyph_position_at_coordinate((x, y));
+
+    let result = JsObject::new(&mut cx);
+    let pos_val = cx.number(pos.position as f64);
+    result.set(&mut cx, "pos", pos_val)?;
+    let affinity_val = cx.number(pos.affinity as i32 as f64);
+    result.set(&mut cx, "affinity", affinity_val)?;
+
+    Ok(result)
+}
+
+pub fn getRectsForRange(mut cx: FunctionContext) -> JsResult<JsArray> {
+    let this = cx.argument::<BoxedParagraph>(0)?;
+    let start = float_arg_or_bail(&mut cx, 1, "start")? as usize;
+    let end = float_arg_or_bail(&mut cx, 2, "end")? as usize;
+    let h_style = opt_float_arg(&mut cx, 3).unwrap_or(0.0) as i32;
+    let w_style = opt_float_arg(&mut cx, 4).unwrap_or(0.0) as i32;
+
+    let rect_height_style = match h_style {
+        1 => RectHeightStyle::Max,
+        2 => RectHeightStyle::IncludeLineSpacingMiddle,
+        3 => RectHeightStyle::IncludeLineSpacingTop,
+        4 => RectHeightStyle::IncludeLineSpacingBottom,
+        5 => RectHeightStyle::Strut,
+        _ => RectHeightStyle::Tight,
+    };
+    let rect_width_style = match w_style {
+        1 => RectWidthStyle::Max,
+        _ => RectWidthStyle::Tight,
+    };
+
+    let this = this.borrow();
+    let boxes = this
+        .paragraph
+        .get_rects_for_range(start..end, rect_height_style, rect_width_style);
+
+    let result = JsArray::new(&mut cx, boxes.len());
+    for (i, tb) in boxes.iter().enumerate() {
+        let obj = JsObject::new(&mut cx);
+
+        let rect = JsArray::new(&mut cx, 4);
+        let v = cx.number(tb.rect.left);
+        rect.set(&mut cx, 0u32, v)?;
+        let v = cx.number(tb.rect.top);
+        rect.set(&mut cx, 1u32, v)?;
+        let v = cx.number(tb.rect.right);
+        rect.set(&mut cx, 2u32, v)?;
+        let v = cx.number(tb.rect.bottom);
+        rect.set(&mut cx, 3u32, v)?;
+        obj.set(&mut cx, "rect", rect)?;
+
+        let dir = cx.number(tb.direct as i32 as f64);
+        obj.set(&mut cx, "direction", dir)?;
+
+        result.set(&mut cx, i as u32, obj)?;
+    }
+
+    Ok(result)
+}
+
+//
+// Context integration: drawParagraph
+//
+
+pub fn drawParagraph(mut cx: FunctionContext) -> JsResult<JsUndefined> {
+    let ctx = cx.argument::<crate::context::BoxedContext2D>(0)?;
+    let para = cx.argument::<BoxedParagraph>(1)?;
+    let x = float_arg_or_bail(&mut cx, 2, "x")?;
+    let y = float_arg_or_bail(&mut cx, 3, "y")?;
+
+    let para = para.borrow_mut();
+    let ctx = ctx.borrow();
+
+    ctx.with_canvas(|canvas| {
+        para.paragraph.paint(canvas, Point::new(x, y));
+    });
+
+    Ok(cx.undefined())
+}
+
