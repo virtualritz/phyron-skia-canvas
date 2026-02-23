@@ -220,7 +220,10 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("FontLibrary_has", font_library::has)?;
     cx.export_function("FontLibrary_family", font_library::family)?;
     cx.export_function("FontLibrary_addFamily", font_library::addFamily)?;
-    cx.export_function("FontLibrary_addFamilyFromData", font_library::addFamilyFromData)?;
+    cx.export_function(
+        "FontLibrary_addFamilyFromData",
+        font_library::addFamilyFromData,
+    )?;
     cx.export_function("FontLibrary_reset", font_library::reset)?;
 
     // -- ParagraphBuilder
@@ -241,8 +244,14 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     cx.export_function("Paragraph_getHeight", paragraph::getHeight)?;
     cx.export_function("Paragraph_getLongestLine", paragraph::getLongestLine)?;
     cx.export_function("Paragraph_getMaxWidth", paragraph::getMaxWidth)?;
-    cx.export_function("Paragraph_getMaxIntrinsicWidth", paragraph::getMaxIntrinsicWidth)?;
-    cx.export_function("Paragraph_getMinIntrinsicWidth", paragraph::getMinIntrinsicWidth)?;
+    cx.export_function(
+        "Paragraph_getMaxIntrinsicWidth",
+        paragraph::getMaxIntrinsicWidth,
+    )?;
+    cx.export_function(
+        "Paragraph_getMinIntrinsicWidth",
+        paragraph::getMinIntrinsicWidth,
+    )?;
     cx.export_function(
         "Paragraph_getAlphabeticBaseline",
         paragraph::getAlphabeticBaseline,

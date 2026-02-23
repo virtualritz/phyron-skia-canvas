@@ -16,11 +16,7 @@ on:
 jobs:
   mac:
     if: ${{ inputs.platforms == 'all' || inputs.platforms == 'mac' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, arm64]
-    runs-on: ${{ matrix.arch == 'x64' && 'macos-13' || 'macos-14' }}
+    runs-on: macos-15
 
     steps:
       - name: Checkout repository

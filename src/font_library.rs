@@ -409,8 +409,7 @@ impl FontLibrary {
             }
 
             // build a set of explicitly-set axis tags for quick lookup
-            let explicit_tags: Vec<u32> =
-                variations.iter().map(|(tag, _)| **tag).collect();
+            let explicit_tags: Vec<u32> = variations.iter().map(|(tag, _)| **tag).collect();
 
             // collect any instantiated variable fonts in a TFP to be used as
             // the 'dynamic' font mgr (which is searched before the
@@ -425,10 +424,7 @@ impl FontLibrary {
                     // add explicit variations first
                     for (tag, value) in variations {
                         // find the matching axis parameter to clamp values
-                        if let Some(param) = params
-                            .iter()
-                            .find(|p| *p.tag == **tag)
-                        {
+                        if let Some(param) = params.iter().find(|p| *p.tag == **tag) {
                             coords.push(Coordinate {
                                 axis: param.tag,
                                 value: value.max(param.min).min(param.max),
@@ -438,17 +434,15 @@ impl FontLibrary {
 
                     // auto-add wght if not explicitly set
                     let wght_tag = FourByteTag::from_chars('w', 'g', 'h', 't');
-                    if !explicit_tags.contains(&*wght_tag) {
-                        if let Some(param) =
-                            params.iter().find(|p| *p.tag == *wght_tag)
-                        {
-                            let weight = *style.font_style().weight() - 1;
-                            let value = (weight as f32).max(param.min).min(param.max);
-                            coords.push(Coordinate {
-                                axis: param.tag,
-                                value,
-                            });
-                        }
+                    if !explicit_tags.contains(&*wght_tag)
+                        && let Some(param) = params.iter().find(|p| *p.tag == *wght_tag)
+                    {
+                        let weight = *style.font_style().weight() - 1;
+                        let value = (weight as f32).max(param.min).min(param.max);
+                        coords.push(Coordinate {
+                            axis: param.tag,
+                            value,
+                        });
                     }
 
                     if !coords.is_empty() {

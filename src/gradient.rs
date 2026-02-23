@@ -2,7 +2,7 @@
 use neon::prelude::*;
 use skia_safe::{
     Color4f, Matrix, Point, Shader, TileMode,
-    gradient_shader::{self, interpolation, Interpolation},
+    gradient_shader::{self, Interpolation, interpolation},
 };
 use std::{cell::RefCell, rc::Rc};
 

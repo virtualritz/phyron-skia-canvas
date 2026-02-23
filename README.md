@@ -4,6 +4,12 @@
 >
 > - **F16/F32 pixel formats** — True 16-bit and 32-bit floating-point render surfaces for HDR compositing
 > - **Extended color spaces** — Display P3, Rec.2020, HDR10 (PQ), HLG, and linear variants
+> - **OkLab gradient interpolation** — Perceptually uniform gradients in OkLab, OkLCH, Lab, LCH, HSL, and HWB color spaces
+> - **CanvasKit filter parity** — `ColorFilter` and `ImageFilter` classes matching the CanvasKit API (matrix, blend, blur, drop shadow, lighting, displacement, convolution, and more)
+> - **Font registration from buffers** — Load fonts from `Buffer`/`ArrayBuffer` without writing to disk
+> - **Variable font axis control** — `ctx.fontVariationSettings` for `wght`, `wdth`, `opsz`, `slnt`, and custom axes
+> - **ParagraphBuilder / Paragraph API** — CanvasKit-compatible rich text with mixed styles, per-run text shadows, hit-testing, and line metrics
+> - **TextDecoration / TextDecorationStyle enums** — Bitmask constants matching CanvasKit values
 
 ```js
 import { Canvas } from "phyron-skia-canvas";

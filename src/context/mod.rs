@@ -150,9 +150,7 @@ impl Default for State {
 }
 
 impl State {
-    pub fn typography(
-        &self,
-    ) -> (TextStyle, ParagraphStyle, DecorationStyle, Baseline, bool) {
+    pub fn typography(&self) -> (TextStyle, ParagraphStyle, DecorationStyle, Baseline, bool) {
         let mut char_style = self.char_style.clone(); // use font size & style to calculate spacing
         char_style.set_word_spacing(self.word_spacing.in_px(char_style.font_size()));
         char_style.set_letter_spacing(self.letter_spacing.in_px(char_style.font_size()));

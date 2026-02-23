@@ -10,8 +10,9 @@ use skia_safe::{
     font_style::{FontStyle, Slant, Weight, Width},
     textlayout::{
         FontCollection, Paragraph as SkParagraph, ParagraphBuilder as SkParagraphBuilder,
-        ParagraphStyle, PlaceholderStyle, RectHeightStyle, RectWidthStyle, TextAlign, TextDecoration,
-        TextDecorationMode, TextDecorationStyle, TextDirection, TextShadow, TextStyle,
+        ParagraphStyle, PlaceholderStyle, RectHeightStyle, RectWidthStyle, TextAlign,
+        TextDecoration, TextDecorationMode, TextDecorationStyle, TextDirection, TextShadow,
+        TextStyle,
     },
 };
 
@@ -49,57 +50,57 @@ fn parse_text_style(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonRes
     }
 
     // fontFamilies
-    if let Ok(fam_val) = obj.get::<JsValue, _, _>(cx, "fontFamilies") {
-        if let Ok(fam_arr) = fam_val.downcast::<JsArray, _>(cx) {
-            let fam_vec = fam_arr.to_vec(cx)?;
-            let families = strings_in(cx, &fam_vec);
-            style.set_font_families(&families);
-        }
+    if let Ok(fam_val) = obj.get::<JsValue, _, _>(cx, "fontFamilies")
+        && let Ok(fam_arr) = fam_val.downcast::<JsArray, _>(cx)
+    {
+        let fam_vec = fam_arr.to_vec(cx)?;
+        let families = strings_in(cx, &fam_vec);
+        style.set_font_families(&families);
     }
 
     // color / foregroundColor
-    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "color") {
-        if let Some(color) = color_in(cx, color_val) {
-            let mut paint = Paint::default();
-            paint.set_color(color);
-            style.set_foreground_paint(&paint);
-        }
+    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "color")
+        && let Some(color) = color_in(cx, color_val)
+    {
+        let mut paint = Paint::default();
+        paint.set_color(color);
+        style.set_foreground_paint(&paint);
     }
-    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "foregroundColor") {
-        if let Some(color) = color_in(cx, color_val) {
-            let mut paint = Paint::default();
-            paint.set_color(color);
-            style.set_foreground_paint(&paint);
-        }
+    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "foregroundColor")
+        && let Some(color) = color_in(cx, color_val)
+    {
+        let mut paint = Paint::default();
+        paint.set_color(color);
+        style.set_foreground_paint(&paint);
     }
 
     // backgroundColor
-    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "backgroundColor") {
-        if let Some(color) = color_in(cx, color_val) {
-            let mut paint = Paint::default();
-            paint.set_color(color);
-            style.set_background_paint(&paint);
-        }
+    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "backgroundColor")
+        && let Some(color) = color_in(cx, color_val)
+    {
+        let mut paint = Paint::default();
+        paint.set_color(color);
+        style.set_background_paint(&paint);
     }
 
     // fontStyle: { weight, width, slant }
-    if let Ok(fs_val) = obj.get::<JsValue, _, _>(cx, "fontStyle") {
-        if let Ok(fs_obj) = fs_val.downcast::<JsObject, _>(cx) {
-            let weight = opt_float_for_key(cx, &fs_obj, "weight")
-                .map(|w| Weight::from(w as i32))
-                .unwrap_or(Weight::NORMAL);
-            let width = opt_float_for_key(cx, &fs_obj, "width")
-                .map(|w| Width::from(w as i32))
-                .unwrap_or(Width::NORMAL);
-            let slant = opt_float_for_key(cx, &fs_obj, "slant")
-                .map(|s| match s as i32 {
-                    1 => Slant::Italic,
-                    2 => Slant::Oblique,
-                    _ => Slant::Upright,
-                })
-                .unwrap_or(Slant::Upright);
-            style.set_font_style(FontStyle::new(weight, width, slant));
-        }
+    if let Ok(fs_val) = obj.get::<JsValue, _, _>(cx, "fontStyle")
+        && let Ok(fs_obj) = fs_val.downcast::<JsObject, _>(cx)
+    {
+        let weight = opt_float_for_key(cx, &fs_obj, "weight")
+            .map(|w| Weight::from(w as i32))
+            .unwrap_or(Weight::NORMAL);
+        let width = opt_float_for_key(cx, &fs_obj, "width")
+            .map(|w| Width::from(w as i32))
+            .unwrap_or(Width::NORMAL);
+        let slant = opt_float_for_key(cx, &fs_obj, "slant")
+            .map(|s| match s as i32 {
+                1 => Slant::Italic,
+                2 => Slant::Oblique,
+                _ => Slant::Upright,
+            })
+            .unwrap_or(Slant::Upright);
+        style.set_font_style(FontStyle::new(weight, width, slant));
     }
 
     // letterSpacing
@@ -146,10 +147,10 @@ fn parse_text_style(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonRes
     }
 
     // decorationColor
-    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "decorationColor") {
-        if let Some(color) = color_in(cx, color_val) {
-            style.set_decoration_color(color);
-        }
+    if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "decorationColor")
+        && let Some(color) = color_in(cx, color_val)
+    {
+        style.set_decoration_color(color);
     }
 
     // decorationThickness
@@ -161,43 +162,35 @@ fn parse_text_style(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonRes
     style.set_decoration_mode(TextDecorationMode::Through);
 
     // shadows: [{ color, offset: [dx, dy], blurRadius }]
-    if let Ok(shadows_val) = obj.get::<JsValue, _, _>(cx, "shadows") {
-        if let Ok(shadows_arr) = shadows_val.downcast::<JsArray, _>(cx) {
-            for shadow_val in shadows_arr.to_vec(cx)? {
-                if let Ok(shadow_obj) = shadow_val.downcast::<JsObject, _>(cx) {
-                    let color = obj
-                        .get::<JsValue, _, _>(cx, "color")
-                        .ok()
-                        .and_then(|v| color_in(cx, v))
-                        .unwrap_or(Color::BLACK);
+    if let Ok(shadows_val) = obj.get::<JsValue, _, _>(cx, "shadows")
+        && let Ok(shadows_arr) = shadows_val.downcast::<JsArray, _>(cx)
+    {
+        for shadow_val in shadows_arr.to_vec(cx)? {
+            if let Ok(shadow_obj) = shadow_val.downcast::<JsObject, _>(cx) {
+                let color = shadow_obj
+                    .get::<JsValue, _, _>(cx, "color")
+                    .ok()
+                    .and_then(|v| color_in(cx, v))
+                    .unwrap_or(Color::BLACK);
 
-                    // Properly read from shadow_obj, not obj
-                    let color = shadow_obj
-                        .get::<JsValue, _, _>(cx, "color")
-                        .ok()
-                        .and_then(|v| color_in(cx, v))
-                        .unwrap_or(color);
-
-                    let mut offset = Point::new(0.0, 0.0);
-                    if let Ok(offset_val) = shadow_obj.get::<JsValue, _, _>(cx, "offset") {
-                        if let Ok(offset_arr) = offset_val.downcast::<JsArray, _>(cx) {
-                            let vals = offset_arr.to_vec(cx)?;
-                            if vals.len() >= 2 {
-                                if let (Ok(dx), Ok(dy)) = (
-                                    vals[0].downcast::<JsNumber, _>(cx),
-                                    vals[1].downcast::<JsNumber, _>(cx),
-                                ) {
-                                    offset =
-                                        Point::new(dx.value(cx) as f32, dy.value(cx) as f32);
-                                }
-                            }
-                        }
+                let mut offset = Point::new(0.0, 0.0);
+                if let Ok(offset_val) = shadow_obj.get::<JsValue, _, _>(cx, "offset")
+                    && let Ok(offset_arr) = offset_val.downcast::<JsArray, _>(cx)
+                {
+                    let vals = offset_arr.to_vec(cx)?;
+                    if vals.len() >= 2
+                        && let (Ok(dx), Ok(dy)) = (
+                            vals[0].downcast::<JsNumber, _>(cx),
+                            vals[1].downcast::<JsNumber, _>(cx),
+                        )
+                    {
+                        offset = Point::new(dx.value(cx) as f32, dy.value(cx) as f32);
                     }
-
-                    let blur = opt_float_for_key(cx, &shadow_obj, "blurRadius").unwrap_or(0.0);
-
-                    style.add_shadow(TextShadow::new(color, offset, blur as f64));
                 }
+
+                let blur = opt_float_for_key(cx, &shadow_obj, "blurRadius").unwrap_or(0.0);
+
+                style.add_shadow(TextShadow::new(color, offset, blur as f64));
             }
         }
     }
@@ -214,12 +207,24 @@ fn parse_paragraph_style(
     // textAlign
     if let Ok(align_str) = string_for_key(cx, obj, "textAlign") {
         match align_str.to_lowercase().as_str() {
-            "left" => { style.set_text_align(TextAlign::Left); }
-            "right" => { style.set_text_align(TextAlign::Right); }
-            "center" => { style.set_text_align(TextAlign::Center); }
-            "justify" => { style.set_text_align(TextAlign::Justify); }
-            "start" => { style.set_text_align(TextAlign::Start); }
-            "end" => { style.set_text_align(TextAlign::End); }
+            "left" => {
+                style.set_text_align(TextAlign::Left);
+            }
+            "right" => {
+                style.set_text_align(TextAlign::Right);
+            }
+            "center" => {
+                style.set_text_align(TextAlign::Center);
+            }
+            "justify" => {
+                style.set_text_align(TextAlign::Justify);
+            }
+            "start" => {
+                style.set_text_align(TextAlign::Start);
+            }
+            "end" => {
+                style.set_text_align(TextAlign::End);
+            }
             _ => {}
         }
     }
@@ -227,8 +232,12 @@ fn parse_paragraph_style(
     // textDirection
     if let Ok(dir_str) = string_for_key(cx, obj, "textDirection") {
         match dir_str.to_lowercase().as_str() {
-            "rtl" => { style.set_text_direction(TextDirection::RTL); }
-            "ltr" => { style.set_text_direction(TextDirection::LTR); }
+            "rtl" => {
+                style.set_text_direction(TextDirection::RTL);
+            }
+            "ltr" => {
+                style.set_text_direction(TextDirection::LTR);
+            }
             _ => {}
         }
     }
@@ -239,18 +248,18 @@ fn parse_paragraph_style(
     }
 
     // ellipsis
-    if let Ok(ell) = string_for_key(cx, obj, "ellipsis") {
-        if !ell.is_empty() {
-            style.set_ellipsis(ell);
-        }
+    if let Ok(ell) = string_for_key(cx, obj, "ellipsis")
+        && !ell.is_empty()
+    {
+        style.set_ellipsis(ell);
     }
 
     // textStyle (default text style for the paragraph)
-    if let Ok(ts_val) = obj.get::<JsValue, _, _>(cx, "textStyle") {
-        if let Ok(ts_obj) = ts_val.downcast::<JsObject, _>(cx) {
-            let text_style = parse_text_style(cx, &ts_obj)?;
-            style.set_text_style(&text_style);
-        }
+    if let Ok(ts_val) = obj.get::<JsValue, _, _>(cx, "textStyle")
+        && let Ok(ts_obj) = ts_val.downcast::<JsObject, _>(cx)
+    {
+        let text_style = parse_text_style(cx, &ts_obj)?;
+        style.set_text_style(&text_style);
     }
 
     Ok(style)
@@ -529,4 +538,3 @@ pub fn drawParagraph(mut cx: FunctionContext) -> JsResult<JsUndefined> {
 
     Ok(cx.undefined())
 }
-
