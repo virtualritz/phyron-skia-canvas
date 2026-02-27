@@ -844,7 +844,7 @@ pub fn drawImage(mut cx: FunctionContext) -> JsResult<JsUndefined> {
         let mut this = this.borrow_mut();
         this.draw_image(img, &src, &dst);
     } else if let Content::Vector(pict, pict_size) = &content {
-        let image = source.downcast::<BoxedImage, _>(&mut cx).unwrap();
+        let image = source.downcast_or_throw::<BoxedImage, _>(&mut cx)?;
         let fit_to_canvas = image.borrow().autosized;
         let (mut src, mut dst) = _layout_rects(&mut cx, *pict_size, &nums)?;
 

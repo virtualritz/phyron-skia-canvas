@@ -1,6 +1,6 @@
 [package]
 name = "phyron-skia-canvas"
-version = "3.3.0"
+version = "3.4.1"
 description = "A canvas environment for Node"
 authors = [
     "Christian Swinehart <drafting@samizdat.co>",

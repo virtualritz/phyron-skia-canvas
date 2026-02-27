@@ -18,8 +18,12 @@ use crate::context::{BoxedContext2D, page::Page};
 
 thread_local!(
     static APP: RefCell<App> = RefCell::new(App::default());
-    static EVENT_LOOP: RefCell<EventLoop<AppEvent>> =
-        RefCell::new(EventLoop::with_user_event().build().unwrap());
+    static EVENT_LOOP: RefCell<EventLoop<AppEvent>> = RefCell::new(
+        EventLoop::with_user_event()
+            .build()
+            // SAFETY: Event loop creation only fails on unsupported platforms.
+            .expect("Failed to create event loop"),
+    );
     static PROXY: RefCell<EventLoopProxy<AppEvent>> =
         RefCell::new(EVENT_LOOP.with_borrow(|event_loop| event_loop.create_proxy()));
 );

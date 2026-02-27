@@ -163,11 +163,9 @@ impl Sieve {
                 self.add_mouse_event("mouseleave");
             }
 
-            WindowEvent::CursorMoved { position, .. } => {
-                if *position != self.mouse_point {
-                    self.mouse_point = *position;
-                    self.add_mouse_event("mousemove");
-                }
+            WindowEvent::CursorMoved { position, .. } if *position != self.mouse_point => {
+                self.mouse_point = *position;
+                self.add_mouse_event("mousemove");
             }
 
             WindowEvent::MouseWheel { delta, .. } => {
@@ -229,7 +227,9 @@ impl Sieve {
                 .to_string();
 
                 let key_text = match logical_key {
-                    Named(n) => serde_json::from_value(json!(n)).unwrap(),
+                    Named(n) => {
+                        serde_json::from_value(json!(n)).unwrap_or_else(|_| format!("{:?}", n))
+                    }
                     Character(c) => c.to_string(),
                     _ => String::new(),
                 };

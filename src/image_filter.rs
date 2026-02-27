@@ -262,6 +262,7 @@ fn checkDeleted(cx: &mut FunctionContext, filter: &BoxedImageFilter) -> NeonResu
 fn parse_blend_mode(cx: &mut FunctionContext, idx: usize) -> BlendMode {
     match cx.argument_opt(idx) {
         Some(arg) if arg.is_a::<JsString, _>(cx) => {
+            // SAFETY: `is_a::<JsString>` guard on the enclosing match arm.
             let s = arg.downcast::<JsString, _>(cx).unwrap().value(cx);
             match s.to_lowercase().as_str() {
                 "clear" => BlendMode::Clear,
@@ -304,6 +305,7 @@ fn parse_blend_mode(cx: &mut FunctionContext, idx: usize) -> BlendMode {
 fn parse_color_channel(cx: &mut FunctionContext, idx: usize) -> ColorChannel {
     match cx.argument_opt(idx) {
         Some(arg) if arg.is_a::<JsString, _>(cx) => {
+            // SAFETY: `is_a::<JsString>` guard on the enclosing match arm.
             let s = arg.downcast::<JsString, _>(cx).unwrap().value(cx);
             match s.to_uppercase().as_str() {
                 "R" | "RED" => ColorChannel::R,
@@ -474,6 +476,7 @@ pub fn makeMatrixTransform(mut cx: FunctionContext) -> JsResult<JsValue> {
     // sampling: optional object { filter: "nearest"|"linear", mipmap?: ... } or just string
     let sampling = match cx.argument_opt(2) {
         Some(arg) if arg.is_a::<JsString, _>(&mut cx) => {
+            // SAFETY: `is_a::<JsString>` guard on the enclosing match arm.
             let s = arg.downcast::<JsString, _>(&mut cx).unwrap().value(&mut cx);
             match s.to_lowercase().as_str() {
                 "nearest" => SamplingOptions::new(
@@ -511,6 +514,7 @@ pub fn makeMagnifier(mut cx: FunctionContext) -> JsResult<JsValue> {
     // sampling: optional
     let sampling = match cx.argument_opt(4) {
         Some(arg) if arg.is_a::<JsString, _>(&mut cx) => {
+            // SAFETY: `is_a::<JsString>` guard on the enclosing match arm.
             let s = arg.downcast::<JsString, _>(&mut cx).unwrap().value(&mut cx);
             match s.to_lowercase().as_str() {
                 "nearest" => SamplingOptions::new(

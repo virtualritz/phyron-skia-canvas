@@ -334,6 +334,7 @@ impl Filter {
                 }
                 filters
             })
+            // SAFETY: The `or_else` closure always returns `Some(LastFilter { ... })`.
             .expect("Could not create filter")
     }
 }

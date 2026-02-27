@@ -109,6 +109,7 @@ impl Window {
             Some(color) => color,
             None => {
                 spec.background = "rgba(16,16,16,0.85)".to_string();
+                // SAFETY: Hardcoded color string "rgba(16,16,16,0.85)" always parses.
                 css_to_color(&spec.background).unwrap()
             }
         };
@@ -126,7 +127,12 @@ impl Window {
             .with_resizable(spec.resizable)
             .with_decorations(!spec.borderless);
 
-        let handle = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let handle = Arc::new(
+            event_loop
+                .create_window(window_attributes)
+                // SAFETY: Window creation only fails if the event loop is invalid.
+                .expect("Failed to create window"),
+        );
         let renderer = Renderer::for_window(event_loop, handle.clone());
         let sieve = Sieve::new(handle.scale_factor());
 

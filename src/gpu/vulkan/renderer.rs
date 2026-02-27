@@ -37,8 +37,10 @@ pub struct VulkanRenderer {
 impl VulkanRenderer {
     pub fn for_window(event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
         let instance = {
+            // SAFETY: Vulkan must be available since status check passed.
             let library = VulkanLibrary::new().expect("Vulkan libraries not found on system");
             let required_extensions = Surface::required_extensions(event_loop)
+                // SAFETY: Vulkan must be available since status check passed.
                 .expect("Failed to get required Vulkan extensions");
 
             Instance::new(
@@ -63,13 +65,16 @@ impl VulkanRenderer {
             ..DeviceExtensions::empty()
         };
 
-        let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
+        let surface = Surface::from_window(instance.clone(), window.clone())
+            // SAFETY: Surface creation only fails on driver bugs.
+            .expect("Vulkan: failed to create window surface");
 
         // Collect the list of available devices & queues then select ‘best’ one
         // for our needs
         let (physical_device, queue_family_index) = instance
             .enumerate_physical_devices()
-            .unwrap()
+            // SAFETY: Vulkan must be available since status check passed.
+            .expect("Vulkan: failed to enumerate physical devices")
             .filter(|p| {
                 // omit devices that don't support our swapchain requirement
                 p.supported_extensions().contains(&device_extensions)
@@ -101,6 +106,7 @@ impl VulkanRenderer {
                     _ => 5,
                 }
             })
+            // SAFETY: Device creation failure indicates incompatible hardware.
             .expect("Vulkan: no suitable physical device found");
 
         // Use the physical device we selected to initialize a device with a
@@ -116,22 +122,28 @@ impl VulkanRenderer {
                 ..Default::default()
             },
         )
+        // SAFETY: Device creation failure indicates incompatible hardware.
         .expect("Vulkan: device initialization failed");
 
-        let queue = queues.next().unwrap();
+        // SAFETY: Device creation failure indicates incompatible hardware.
+        let queue = queues.next().expect("Vulkan: device has no queues");
 
         // Create a swapchain to manage frame buffers and vsync
         let (swapchain, _images) = {
             // inspect the window to determine the type of framebuffer needed
-            let surface = Surface::from_window(instance.clone(), window.clone()).unwrap();
+            let surface = Surface::from_window(instance.clone(), window.clone())
+                // SAFETY: Surface/framebuffer creation only fails on driver bugs.
+                .expect("Vulkan: failed to create swapchain surface");
             let surface_capabilities = physical_device
                 .surface_capabilities(&surface, Default::default())
-                .unwrap();
+                // SAFETY: Swapchain setup failures indicate GPU driver issues.
+                .expect("Vulkan: failed to query surface capabilities");
 
             // choose the first device format that is on the supported list
             let device_formats = physical_device
                 .surface_formats(&surface, Default::default())
-                .unwrap();
+                // SAFETY: Swapchain setup failures indicate GPU driver issues.
+                .expect("Vulkan: failed to query surface formats");
             let (image_format, _) = device_formats.clone()
                 .into_iter()
                 .find(|(fmt, _)| VK_FORMATS.contains(fmt))
@@ -164,11 +176,13 @@ impl VulkanRenderer {
                                 _ => 3,
                             }
                         })
-                        .unwrap(),
+                        // SAFETY: Swapchain setup failures indicate GPU driver issues.
+                        .expect("Vulkan: no composite alpha mode available"),
                     ..Default::default()
                 },
             )
-            .unwrap()
+            // SAFETY: Swapchain setup failures indicate GPU driver issues.
+            .expect("Vulkan: failed to create swapchain")
         };
 
         Self {
@@ -255,7 +269,8 @@ impl VulkanBackend {
                 depth_stencil: {},
             },
         )
-        .unwrap();
+        // SAFETY: Surface/framebuffer creation only fails on driver bugs.
+        .expect("Vulkan: failed to create render pass");
 
         // Start with no framebuffers and flag that they need to be allocated
         // before rendering
@@ -284,7 +299,7 @@ impl VulkanBackend {
                 }
                 .map(|f| f as _)
                 .unwrap_or_else(|| {
-                    println!("Vulkan: failed to resolve {}", gpo.name().to_str().unwrap());
+                    println!("Vulkan: failed to resolve {}", gpo.name().to_string_lossy());
                     ptr::null()
                 })
             };
@@ -302,6 +317,7 @@ impl VulkanBackend {
                 ),
                 None,
             )
+            // SAFETY: Vulkan must be available since status check passed.
             .expect("Vulkan: Failed to create Skia direct context")
         };
 
@@ -326,6 +342,7 @@ impl VulkanBackend {
                     image_extent: size.into(),
                     ..self.swapchain.create_info()
                 })
+                // SAFETY: Swapchain setup failures indicate GPU driver issues.
                 .expect("failed to recreate swapchain");
 
             self.swapchain = new_swapchain;
@@ -335,11 +352,16 @@ impl VulkanBackend {
                     Framebuffer::new(
                         self.render_pass.clone(),
                         FramebufferCreateInfo {
-                            attachments: vec![ImageView::new_default(image.clone()).unwrap()],
+                            attachments: vec![
+                                ImageView::new_default(image.clone())
+                                    // SAFETY: Surface/framebuffer creation only fails on driver bugs.
+                                    .expect("Vulkan: failed to create image view"),
+                            ],
                             ..Default::default()
                         },
                     )
-                    .unwrap()
+                    // SAFETY: Surface/framebuffer creation only fails on driver bugs.
+                    .expect("Vulkan: failed to create framebuffer")
                 })
                 .collect();
             self.swapchain_is_valid = true;
@@ -425,7 +447,16 @@ impl VulkanBackend {
         };
 
         let render_target = &backend_render_targets::make_vk(
-            (width.try_into().unwrap(), height.try_into().unwrap()),
+            (
+                width
+                    .try_into()
+                    // SAFETY: Window dimensions should fit in i32.
+                    .expect("Vulkan: framebuffer width overflow"),
+                height
+                    .try_into()
+                    // SAFETY: Window dimensions should fit in i32.
+                    .expect("Vulkan: framebuffer height overflow"),
+            ),
             image_info,
         );
 
@@ -437,7 +468,8 @@ impl VulkanBackend {
             None,
             Some(props),
         )
-        .unwrap()
+        // SAFETY: Surface/framebuffer creation only fails on driver bugs.
+        .expect("Vulkan: failed to create render target surface")
     }
 
     fn flush_framebuffer(
@@ -451,16 +483,18 @@ impl VulkanBackend {
         self.skia_ctx.free_gpu_resources();
 
         // reclaim leftover resources from the last frame
-        self.last_render.as_mut().unwrap().cleanup_finished();
+        if let Some(ref mut last) = self.last_render {
+            last.cleanup_finished();
+        }
 
         // let winit know that rendering is complete
         window.pre_present_notify();
 
         // send the framebuffer to the gpu and display it on screen
-        let future = self
-            .last_render
-            .take()
-            .unwrap()
+        let Some(last_render) = self.last_render.take() else {
+            return;
+        };
+        let future = last_render
             .join(acquire_future)
             .then_swapchain_present(
                 self.queue.clone(),

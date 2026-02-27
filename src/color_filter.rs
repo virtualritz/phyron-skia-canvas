@@ -91,6 +91,7 @@ pub fn makeMatrix(mut cx: FunctionContext) -> JsResult<JsValue> {
     // Convert Vec to fixed-size array
     let matrix: [f32; 20] = matrix_vec
         .try_into()
+        // SAFETY: `float_array_arg` validated the length is exactly 20.
         .expect("float_array_arg should have validated length");
 
     let filter = color_filters::matrix_row_major(&matrix, None);
@@ -154,6 +155,7 @@ pub fn makeHSLAMatrix(mut cx: FunctionContext) -> JsResult<JsValue> {
     let matrix_vec = float_array_arg(&mut cx, 1, 20)?;
     let matrix: [f32; 20] = matrix_vec
         .try_into()
+        // SAFETY: `float_array_arg` validated the length is exactly 20.
         .expect("float_array_arg should have validated length");
 
     box_color_filter!(cx, color_filters::hsla_matrix(&matrix))
@@ -187,6 +189,7 @@ pub fn makeTable(mut cx: FunctionContext) -> JsResult<JsValue> {
     let table_vec = u8_array_arg(&mut cx, 1, 256)?;
     let table: [u8; 256] = table_vec
         .try_into()
+        // SAFETY: `u8_array_arg` validated the length is exactly 256.
         .expect("u8_array_arg should have validated length");
 
     wrap_color_filter!(cx, color_filters::table(&table))

@@ -504,10 +504,12 @@ pub fn float_arg_or(cx: &mut FunctionContext, idx: usize, default: f32) -> f32 {
 }
 
 pub fn float_arg(cx: &mut FunctionContext, idx: usize, attr: &str) -> NeonResult<f32> {
+    // SAFETY: `_float_args_at` with a single-element slice always returns a single-element vec.
     _float_args_at(cx, idx, &[attr], false).map(|vec| vec.into_iter().next().unwrap())
 }
 
 pub fn float_arg_or_bail(cx: &mut FunctionContext, idx: usize, attr: &str) -> NeonResult<f32> {
+    // SAFETY: `_float_args_at` with a single-element slice always returns a single-element vec.
     _float_args_at(cx, idx, &[attr], true).map(|vec| vec.into_iter().next().unwrap())
 }
 
@@ -585,6 +587,7 @@ pub fn css_to_color(css: &str) -> Option<Color> {
 
 pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> Option<Color> {
     if val.is_a::<JsString, _>(cx) {
+        // SAFETY: `is_a::<JsString>` check passed above.
         let css = val.downcast::<JsString, _>(cx).unwrap().value(cx);
         css_to_color(&css)
     } else {
@@ -922,7 +925,10 @@ pub fn from_color_type(color_type: ColorType) -> String {
 use crate::context::page::ExportOptions;
 
 pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<ExportOptions> {
-    let opts = opt_object_arg(cx, idx).unwrap();
+    let opts = match opt_object_arg(cx, idx) {
+        Some(obj) => obj,
+        None => return cx.throw_type_error("Expected an options object"),
+    };
     let format = string_for_key(cx, &opts, "format")?;
     let quality = float_for_key(cx, &opts, "quality")?;
     let density = float_for_key(cx, &opts, "density")?;

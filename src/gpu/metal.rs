@@ -234,10 +234,12 @@ pub struct MetalRenderer {
 #[cfg(feature = "window")]
 impl MetalRenderer {
     pub fn for_window(_event_loop: &ActiveEventLoop, window: Arc<Window>) -> Self {
+        // SAFETY: Metal is always available on supported macOS hardware.
         let device = Device::system_default().expect("Metal device not found");
 
         let raw_window = window
             .window_handle()
+            // SAFETY: Window handle is always available for active windows.
             .expect("Failed to retrieve a window handle")
             .as_raw();
 
@@ -288,33 +290,34 @@ impl MetalRenderer {
         let dpr = self.window.scale_factor() as f32;
         let sync = self.cache.state == Resizing;
 
-        let frame = self
-            .backend
-            .render_to_layer(&self.layer, &self.window, sync, &props, |canvas| {
-                // draw background (either use raster cache or set to
-                // window’s background color)
-                canvas.clear(Color::TRANSPARENT);
-                if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip) {
-                    canvas.draw_image_rect(
-                        image,
-                        Some((src, SrcRectConstraint::Strict)),
-                        dst,
-                        &Paint::default(),
-                    );
-                } else {
-                    canvas.clear(matte);
-                }
+        let frame =
+            self.backend
+                .render_to_layer(&self.layer, &self.window, sync, &props, |canvas| {
+                    // draw background (either use raster cache or set to
+                    // window’s background color)
+                    canvas.clear(Color::TRANSPARENT);
+                    if let Some((image, src, dst)) = self.cache.validate(&page, matte, dpr, clip) {
+                        canvas.draw_image_rect(
+                            image,
+                            Some((src, SrcRectConstraint::Strict)),
+                            dst,
+                            &Paint::default(),
+                        );
+                    } else {
+                        canvas.clear(matte);
+                    }
 
-                // draw newly added vector layers
-                canvas.scale((dpr, dpr)).clip_rect(clip, None, Some(true));
-                for pict in page.layers.iter().skip(self.cache.depth()) {
-                    canvas.draw_picture(pict, Some(&matrix), None);
-                }
-            })
-            .unwrap();
+                    // draw newly added vector layers
+                    canvas.scale((dpr, dpr)).clip_rect(clip, None, Some(true));
+                    for pict in page.layers.iter().skip(self.cache.depth()) {
+                        canvas.draw_picture(pict, Some(&matrix), None);
+                    }
+                });
 
-        // cache frame contents for use as background of next render pass
-        self.cache.update(frame, &page, matte, dpr, clip);
+        match frame {
+            Ok(frame) => self.cache.update(frame, &page, matte, dpr, clip),
+            Err(e) => eprintln!("MetalRenderer: draw failed: {}", e),
+        }
     }
 }
 
@@ -338,7 +341,9 @@ impl MetalBackend {
                 queue.as_ptr() as mtl::Handle,
             )
         };
-        let skia_ctx = direct_contexts::make_metal(&backend_ctx, None).unwrap();
+        let skia_ctx = direct_contexts::make_metal(&backend_ctx, None)
+            // SAFETY: Metal context creation only fails on unsupported hardware.
+            .expect("Failed to create Metal Skia context");
         Self { skia_ctx, queue }
     }
 

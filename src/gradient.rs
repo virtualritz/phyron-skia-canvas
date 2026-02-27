@@ -53,7 +53,11 @@ impl Gradient {
 
         // insert the new entries at the right index to keep the vectors sorted
         let idx = stops
-            .binary_search_by(|n| (n - f32::EPSILON).partial_cmp(&offset).unwrap())
+            .binary_search_by(|n| {
+                (n - f32::EPSILON)
+                    .partial_cmp(&offset)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .unwrap_or_else(|x| x);
         match self {
             Gradient::Linear { colors, stops, .. } => {

@@ -427,7 +427,7 @@ pub fn typeface_wght_range(font: &Typeface) -> Vec<i32> {
     if let Some(params) = font.variation_design_parameters() {
         for param in params {
             let chars = vec![param.tag.a(), param.tag.b(), param.tag.c(), param.tag.d()];
-            let tag = String::from_utf8(chars).unwrap();
+            let tag = String::from_utf8_lossy(&chars).into_owned();
             let (min, max) = (param.min as i32, param.max as i32);
             if tag == "wght" {
                 let mut val = min;

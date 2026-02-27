@@ -109,6 +109,7 @@ impl FontLibrary {
             self.collection = Some(self.new_font_collection());
         };
 
+        // SAFETY: `collection` was set to `Some` on line 109 above.
         self.collection.as_ref().unwrap().clone()
     }
 
@@ -316,12 +317,14 @@ impl FontLibrary {
         widths.sort_by(|a, b| {
             a.replace("normal", "_")
                 .partial_cmp(&b.replace("normal", "_"))
+                // SAFETY: `partial_cmp` on `String` always returns `Some`.
                 .unwrap()
         });
         widths.dedup();
         styles.sort_by(|a, b| {
             a.replace("normal", "_")
                 .partial_cmp(&b.replace("normal", "_"))
+                // SAFETY: `partial_cmp` on `String` always returns `Some`.
                 .unwrap()
         });
         styles.dedup();

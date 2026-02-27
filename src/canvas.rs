@@ -102,8 +102,8 @@ pub fn new(mut cx: FunctionContext) -> JsResult<BoxedCanvas> {
         .map(|mode| to_color_space(&mode))
         .unwrap_or_else(ColorSpace::new_srgb);
     let this = RefCell::new(Canvas::new(
-        text_contrast as f64,
-        text_gamma as f64,
+        text_contrast,
+        text_gamma,
         !gpu_enabled,
         color_type,
         color_space,

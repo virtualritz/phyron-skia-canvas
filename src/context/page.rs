@@ -728,7 +728,7 @@ impl PageCache {
     }
 
     pub fn drop(id: usize) {
-        Self::shared().remove(&id).unwrap();
+        Self::shared().remove(&id);
     }
 
     pub fn get(id: usize, opts: &ExportOptions, depth: usize) -> (Option<SkImage>, usize) {
@@ -843,6 +843,7 @@ pub fn pages_arg(
         .iter()
         .map(|obj| obj.downcast::<BoxedContext2D, _>(cx))
         .filter(|ctx| ctx.is_ok())
+        // SAFETY: `.filter(|ctx| ctx.is_ok())` ensures only `Ok` values reach here.
         .map(|obj| obj.unwrap().borrow().get_page_for_export(opts, &engine))
         .collect();
     Ok(PageSequence::from(pages, engine))
@@ -917,7 +918,7 @@ impl ExportOptions {
             }
             // 4x is a good default if available
             else {
-                *valid_msaa.last().unwrap()
+                valid_msaa.last().copied().unwrap_or(0)
             }
         });
         match valid_msaa.contains(&samples) {

@@ -35,11 +35,11 @@ fn main(mut cx: ModuleContext) -> NeonResult<()> {
     // initialize thread pool w/ non-default size if requested
     if let Ok(value) = std::env::var("SKIA_CANVAS_THREADS")
         && let Ok(num) = value.parse::<usize>()
-    {
-        rayon::ThreadPoolBuilder::new()
+        && let Err(e) = rayon::ThreadPoolBuilder::new()
             .num_threads(num)
             .build_global()
-            .unwrap();
+    {
+        eprintln!("Warning: failed to set custom thread pool size: {}", e);
     }
 
     // -- Image -------------------------------------------------------------------------------------

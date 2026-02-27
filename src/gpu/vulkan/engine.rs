@@ -226,7 +226,7 @@ impl VulkanContext {
                 .unwrap_or_else(|| {
                     println!(
                         "Failed to resolve Vulkan proc `{}`",
-                        of.name().to_str().unwrap()
+                        of.name().to_string_lossy()
                     );
                     ptr::null()
                 })

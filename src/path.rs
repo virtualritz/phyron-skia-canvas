@@ -90,7 +90,8 @@ impl Path2D {
 
         // Transform existing path content (inverse rotation)
         let current_path = self.builder.snapshot();
-        let transformed = current_path.make_transform(&rotated.invert().unwrap());
+        let inverse = rotated.invert().unwrap_or_else(Matrix::new_identity);
+        let transformed = current_path.make_transform(&inverse);
         self.builder = PathBuilder::new_path(&transformed);
 
         {
@@ -623,6 +624,7 @@ pub fn edges(mut cx: FunctionContext) -> JsResult<JsArray> {
             }
 
             if verb == Verb::Conic {
+                // SAFETY: `conic_weight()` always returns `Some` for `Verb::Conic` segments.
                 let weight = weights.conic_weight().unwrap();
                 let weight = cx.number(weight);
                 segment.set(&mut cx, 5, weight)?;
