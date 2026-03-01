@@ -205,7 +205,7 @@ fn parse_paragraph_style(
     let mut style = ParagraphStyle::new();
 
     // textAlign
-    if let Ok(align_str) = string_for_key(cx, obj, "textAlign") {
+    if let Some(align_str) = opt_string_for_key(cx, obj, "textAlign") {
         match align_str.to_lowercase().as_str() {
             "left" => {
                 style.set_text_align(TextAlign::Left);
@@ -230,7 +230,7 @@ fn parse_paragraph_style(
     }
 
     // textDirection
-    if let Ok(dir_str) = string_for_key(cx, obj, "textDirection") {
+    if let Some(dir_str) = opt_string_for_key(cx, obj, "textDirection") {
         match dir_str.to_lowercase().as_str() {
             "rtl" => {
                 style.set_text_direction(TextDirection::RTL);
@@ -248,7 +248,7 @@ fn parse_paragraph_style(
     }
 
     // ellipsis
-    if let Ok(ell) = string_for_key(cx, obj, "ellipsis")
+    if let Some(ell) = opt_string_for_key(cx, obj, "ellipsis")
         && !ell.is_empty()
     {
         style.set_ellipsis(ell);
