@@ -6,7 +6,7 @@ use neon::prelude::*;
 use std::cell::RefCell;
 
 use skia_safe::{
-    Color, Color4f, ColorSpace, Paint, Point,
+    Color, Paint, Point,
     font_style::{FontStyle, Slant, Weight, Width},
     textlayout::{
         FontCollection, Paragraph as SkParagraph, ParagraphBuilder as SkParagraphBuilder,

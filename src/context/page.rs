@@ -411,8 +411,13 @@ impl Page {
         match format.as_str() {
             "pdf" => {
                 let mut pdf_bytes = Vec::new();
-                let mut document =
-                    pdf_document(&mut pdf_bytes, quality, density).begin_page(size, None);
+                let metadata = pdf::Metadata {
+                    producer: "Skia Canvas <https://skia-canvas.org>".to_string(),
+                    encoding_quality: Some((quality * 100.0) as i32),
+                    raster_dpi: Some(density * 72.0),
+                    ..Default::default()
+                };
+                let mut document = pdf_document(&mut pdf_bytes, &metadata).begin_page(size, None);
                 let canvas = document.canvas();
                 let picture = self
                     .get_picture(matte)
@@ -644,12 +649,17 @@ impl PageSequence {
             ..
         } = options;
         let mut pdf_bytes = Vec::new();
+        let metadata = pdf::Metadata {
+            producer: "Skia Canvas <https://skia-canvas.org>".to_string(),
+            encoding_quality: Some((quality * 100.0) as i32),
+            raster_dpi: Some(density * 72.0),
+            ..Default::default()
+        };
         self.pages
             .iter()
-            .try_fold(
-                pdf_document(&mut pdf_bytes, quality, density),
-                |doc, page| page.append_to(doc, matte),
-            )
+            .try_fold(pdf_document(&mut pdf_bytes, &metadata), |doc, page| {
+                page.append_to(doc, matte)
+            })
             .map(|doc| doc.close())?;
         Ok(pdf_bytes)
     }
@@ -847,16 +857,11 @@ pub fn pages_arg(
     Ok(PageSequence::from(pages, engine))
 }
 
-fn pdf_document(buffer: &mut impl std::io::Write, quality: f32, density: f32) -> Document<'_> {
-    pdf::new_document(
-        buffer,
-        Some(&pdf::Metadata {
-            producer: "Skia Canvas <https://skia-canvas.org>".to_string(),
-            encoding_quality: Some((quality * 100.0) as i32),
-            raster_dpi: Some(density * 72.0),
-            ..Default::default()
-        }),
-    )
+fn pdf_document<'a>(
+    buffer: &'a mut impl std::io::Write,
+    metadata: &'a pdf::Metadata<'a>,
+) -> Document<'a> {
+    pdf::new_document(buffer, Some(metadata))
 }
 
 #[derive(Clone, Debug, PartialEq)]
