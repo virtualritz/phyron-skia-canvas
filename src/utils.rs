@@ -942,7 +942,9 @@ pub fn export_options_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Ex
     let text_gamma = float_for_key(cx, &opts, "textGamma")?;
     let outline = bool_for_key(cx, &opts, "outline")?;
 
-    let color_space = ColorSpace::new_srgb();
+    let color_space = opt_string_for_key(cx, &opts, "colorSpace")
+        .map(|s| to_color_space(&s))
+        .unwrap_or_else(ColorSpace::new_srgb);
 
     Ok(ExportOptions {
         format,
