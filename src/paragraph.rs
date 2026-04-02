@@ -6,7 +6,7 @@ use neon::prelude::*;
 use std::cell::RefCell;
 
 use skia_safe::{
-    Color, Paint, Point,
+    Color, Color4f, ColorSpace, Paint, Point,
     font_style::{FontStyle, Slant, Weight, Width},
     textlayout::{
         FontCollection, Paragraph as SkParagraph, ParagraphBuilder as SkParagraphBuilder,
@@ -58,28 +58,28 @@ fn parse_text_style(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonRes
         style.set_font_families(&families);
     }
 
-    // color / foregroundColor
+    // color / foregroundColor — accepts CSS strings (sRGB gamma) or [r,g,b,a] float arrays (linear)
     if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "color")
-        && let Some(color) = color_in(cx, color_val)
+        && let Some((color4f, cs)) = color4f_in(cx, color_val)
     {
         let mut paint = Paint::default();
-        paint.set_color(color);
+        paint.set_color4f(color4f, cs.as_ref());
         style.set_foreground_paint(&paint);
     }
     if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "foregroundColor")
-        && let Some(color) = color_in(cx, color_val)
+        && let Some((color4f, cs)) = color4f_in(cx, color_val)
     {
         let mut paint = Paint::default();
-        paint.set_color(color);
+        paint.set_color4f(color4f, cs.as_ref());
         style.set_foreground_paint(&paint);
     }
 
     // backgroundColor
     if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "backgroundColor")
-        && let Some(color) = color_in(cx, color_val)
+        && let Some((color4f, cs)) = color4f_in(cx, color_val)
     {
         let mut paint = Paint::default();
-        paint.set_color(color);
+        paint.set_color4f(color4f, cs.as_ref());
         style.set_background_paint(&paint);
     }
 
@@ -146,11 +146,11 @@ fn parse_text_style(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonRes
         });
     }
 
-    // decorationColor
+    // decorationColor — accepts CSS string or [r,g,b,a] float array
     if let Ok(color_val) = obj.get::<JsValue, _, _>(cx, "decorationColor")
-        && let Some(color) = color_in(cx, color_val)
+        && let Some((color4f, _)) = color4f_in(cx, color_val)
     {
-        style.set_decoration_color(color);
+        style.set_decoration_color(color4f.to_color());
     }
 
     // decorationThickness
@@ -170,7 +170,8 @@ fn parse_text_style(cx: &mut FunctionContext, obj: &Handle<JsObject>) -> NeonRes
                 let color = shadow_obj
                     .get::<JsValue, _, _>(cx, "color")
                     .ok()
-                    .and_then(|v| color_in(cx, v))
+                    .and_then(|v| color4f_in(cx, v))
+                    .map(|(c, _)| c.to_color())
                     .unwrap_or(Color::BLACK);
 
                 let mut offset = Point::new(0.0, 0.0);

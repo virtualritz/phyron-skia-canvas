@@ -2,7 +2,7 @@
 use core::ops::Range;
 use css_color::Rgba;
 use neon::prelude::*;
-use skia_safe::{Color, Data, Matrix, Path, Point, RGB};
+use skia_safe::{Color, Color4f, ColorSpace, Data, Matrix, Path, Point, RGB};
 use std::{cmp, f32::consts::PI};
 
 //
@@ -602,6 +602,27 @@ pub fn color_in<'a>(cx: &mut FunctionContext<'a>, val: Handle<'a, JsValue>) -> O
     }
 }
 
+/// Parse a color value that may be a CSS string or a `[r, g, b, a]` float array.
+/// Returns `(Color4f, Option<ColorSpace>)` where:
+/// - Float array: values are treated as already in the destination color space (`None`)
+/// - CSS string: values are in sRGB gamma (`Some(sRGB)`)
+pub fn color4f_in<'a>(
+    cx: &mut FunctionContext<'a>,
+    val: Handle<'a, JsValue>,
+) -> Option<(Color4f, Option<ColorSpace>)> {
+    if val.is_a::<JsArray, _>(cx) {
+        let arr = val.downcast::<JsArray, _>(cx).ok()?;
+        let r = arr.get::<JsNumber, _, _>(cx, 0).ok()?.value(cx) as f32;
+        let g = arr.get::<JsNumber, _, _>(cx, 1).ok()?.value(cx) as f32;
+        let b = arr.get::<JsNumber, _, _>(cx, 2).ok()?.value(cx) as f32;
+        let a = arr.get::<JsNumber, _, _>(cx, 3).ok()?.value(cx) as f32;
+        Some((Color4f::new(r, g, b, a), None))
+    } else {
+        let color = color_in(cx, val)?;
+        Some((Color4f::from(color), Some(ColorSpace::new_srgb())))
+    }
+}
+
 pub fn opt_color_arg(cx: &mut FunctionContext, idx: usize) -> Option<Color> {
     match cx.argument_opt(idx) {
         Some(arg) => color_in(cx, arg),
@@ -730,7 +751,7 @@ pub fn points_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Vec<Point>
 
 use crate::image::ImageData;
 use neon::types::buffer::TypedArray;
-use skia_safe::{AlphaType, ColorSpace, ColorType, ImageInfo};
+use skia_safe::{AlphaType, ColorType, ImageInfo};
 
 pub fn opt_image_info_arg(cx: &mut FunctionContext, idx: usize) -> NeonResult<Option<ImageInfo>> {
     if let Some(raw_info) = opt_object_arg(cx, idx) {
