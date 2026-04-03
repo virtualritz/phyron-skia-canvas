@@ -53,7 +53,7 @@ raw-window-metal = { version = "1", optional = true }
 rayon = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
-skia-safe = { version = "0.93", features = ["textlayout", "webp", "svg"] }
+skia-safe = { version = "0.93.1", features = ["textlayout", "webp", "svg"] }
 spin_sleep = { version = "1", optional = true }
 vulkano = { version = "0.35", optional = true }
 
