@@ -428,6 +428,9 @@ export interface ExportOptions extends RenderOptions {
 
   /** Color type to use when exporting in "raw" format */
   colorType?: ColorType;
+
+  /** Color space for the output image (defaults to "srgb") */
+  colorSpace?: ColorSpace;
 }
 
 export interface SaveOptions extends ExportOptions {
