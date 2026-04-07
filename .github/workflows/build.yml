@@ -118,13 +118,19 @@ jobs:
           REPO: ${{ github.repository }}
           REF: ${{ github.ref_name }}
         run: |
-          git clone --depth 1 --branch $REF ${SERVER}/${REPO} skia-canvas
+          git clone --depth 1 --branch $REF --recurse-submodules ${SERVER}/${REPO} skia-canvas
 
       - name: Checkout rust-skia and apply static deps patch
         run: |
           export TAG=$(cd skia-canvas && just skia-version)
           git clone --depth 1 --branch $TAG --recurse-submodules -j8 https://github.com/rust-skia/rust-skia.git
           patch -d rust-skia -p1 -F10 < ./skia-canvas/containers/use-static-fontconfig.patch
+
+      - name: Vendor Skia dependencies
+        run: |
+          mkdir -p rust-skia/skia-bindings/skia/third_party/externals
+          ln -s $GITHUB_WORKSPACE/skia-canvas/vendor/freetype rust-skia/skia-bindings/skia/third_party/externals/freetype
+          ln -s $GITHUB_WORKSPACE/skia-canvas/vendor/zlib rust-skia/skia-bindings/skia/third_party/externals/zlib
 
       - name: Build module
         run: |
