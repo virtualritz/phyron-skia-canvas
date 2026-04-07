@@ -35,10 +35,13 @@ jobs:
       - name: Use Ninja
         uses: seanmiddleditch/gha-setup-ninja@master
 
+      - name: Install just
+        uses: extractions/setup-just@v2
+
       - name: Build module
         env:
           MACOSX_DEPLOYMENT_TARGET: 10.14
-        run: make optimized
+        run: just optimized
 
       - name: Add to release
         env:
@@ -74,8 +77,11 @@ jobs:
       - name: Install Ninja
         run: choco install ninja
 
+      - name: Install just
+        uses: extractions/setup-just@v2
+
       - name: Build module
-        run: make optimized
+        run: just optimized
 
       - name: Add to release
         env:
@@ -102,6 +108,10 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           echo CARGO_TERM_COLOR=always >> $GITHUB_ENV
 
+      - name: Install just
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+
       - name: Checkout skia-canvas
         env:
           SERVER: ${{ github.server_url }}
@@ -112,14 +122,13 @@ jobs:
 
       - name: Checkout rust-skia and apply static deps patch
         run: |
-          export TAG=$(make -sC skia-canvas skia-version)
+          export TAG=$(cd skia-canvas && just skia-version)
           git clone --depth 1 --branch $TAG --recurse-submodules -j8 https://github.com/rust-skia/rust-skia.git
           patch -d rust-skia -p1 -F10 < ./skia-canvas/containers/use-static-fontconfig.patch
 
       - name: Build module
         run: |
-          make -sC skia-canvas with-local-skia
-          cd skia-canvas && make optimized
+          cd skia-canvas && just with-local-skia && just optimized
 
       - name: Add to release
         env:

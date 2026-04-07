@@ -205,6 +205,28 @@ Start by installing:
 
 [Detailed instructions](https://github.com/rust-skia/rust-skia#building) for setting up these dependencies on different operating systems can be found in the ‘Building’ section of the Rust Skia documentation. The Dockerfiles in the [containers](https://github.com/samizdatco/skia-canvas/tree/main/containers) directory may also be useful for identifying needed dependencies. Once all the necessary compilers and libraries are present, running `npm run build` will give you a usable library (after a fairly lengthy compilation process).
 
+## Development
+
+This project uses [just](https://github.com/casey/just) as its command runner. Run `just --list` to see all available recipes.
+
+| Recipe               | Description                                                 |
+| -------------------- | ----------------------------------------------------------- |
+| `just`               | Build native module (development)                           |
+| `just optimized`     | Build optimized native module                               |
+| `just dev`           | Build with custom features                                  |
+| `just test`          | Run tests                                                   |
+| `just debug`         | Run tests in watch mode                                     |
+| `just visual`        | Run visual tests                                            |
+| `just check`         | Type check with cargo                                       |
+| `just clean`         | Remove compiled binary                                      |
+| `just distclean`     | Full clean (node_modules, target, cargo)                    |
+| `just release`       | Bump patch version, commit, tag, push, create draft release |
+| `just release minor` | Same as above but bump minor version                        |
+| `just release major` | Same as above but bump major version                        |
+| `just publish`       | Undraft the GitHub release and trigger npm publish          |
+
+The release workflow bumps the version in both `package.json` and `Cargo.toml`, creates a git tag, pushes, and creates a draft GitHub release. After CI finishes building platform binaries, run `just publish` to make the release public and publish to npm.
+
 ## Global Settings
 
 > There are a handful of settings that can only be configured at launch and will apply to all the canvases you create in your script. The sections below describe the different [environment variables][node_env] you can set to make global changes. You can either set them as part of your command line invocation, or place them in a `.env` file in your project directory and use Node 20's [`--env-file` argument][node_env_arg] to load them all at once.

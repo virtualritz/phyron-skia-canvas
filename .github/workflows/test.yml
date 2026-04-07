@@ -39,8 +39,11 @@ jobs:
       - name: Use Ninja
         uses: seanmiddleditch/gha-setup-ninja@master
 
+      - name: Install just
+        uses: extractions/setup-just@v2
+
       - name: Build module
-        run: make optimized
+        run: just optimized
 
       - name: Run tests
         run: |
