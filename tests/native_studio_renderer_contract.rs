@@ -11,8 +11,8 @@
 
 use anyhow::Result;
 use phyron_skia_canvas::native::{
-    BlendMode, LinearColorSpace, NativeBackend, NativePaint, PaintStyle, PixelColorSpace,
-    PixelDepth, PixelExportOptions, Rect, RgbaLinear, StrokeCap, SurfaceOptions,
+    BlendMode, LinearColorSpace, NativeAffine, NativeBackend, NativePaint, PaintStyle,
+    PixelColorSpace, PixelDepth, PixelExportOptions, Rect, RgbaLinear, StrokeCap, SurfaceOptions,
 };
 
 const ALPHA_HALF_U8: u8 = 128;
@@ -395,5 +395,308 @@ fn dash_pattern_state_round_trips_through_paint() -> Result<()> {
     let _ = dash; // release immutable borrow before clear_dash takes &mut.
     paint.clear_dash();
     assert!(paint.dash.is_none());
+    Ok(())
+}
+
+// --- Chunk 3B: canvas state + layer basics ---------------------------------
+
+/// `clip_rect` masks draws to the rectangle. Pixels outside the clip rect
+/// must remain at the cleared (transparent) color.
+#[test]
+fn clip_rect_masks_drawing() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(8, 8, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.save();
+        canvas.clip_rect(Rect::from_xywh(2.0, 2.0, 4.0, 4.0));
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 8.0, 8.0),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+        );
+        canvas.restore();
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    let alpha_at = |x: usize, y: usize| px.pixels()[y * stride + x * 4 + 3];
+    assert_eq!(alpha_at(0, 0), 0, "top-left outside clip stays transparent");
+    assert_eq!(
+        alpha_at(7, 7),
+        0,
+        "bottom-right outside clip stays transparent"
+    );
+    assert!(alpha_at(3, 3) > 240, "inside clip stays red opaque");
+    Ok(())
+}
+
+/// `clip_rrect` rounds the corners. The four extreme corners of the clip
+/// rect must be transparent while the center remains opaque.
+#[test]
+fn clip_rrect_rounds_corners() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(16, 16, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.save();
+        canvas.clip_rrect(Rect::from_xywh(0.0, 0.0, 16.0, 16.0), 8.0);
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 16.0, 16.0),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 1.0, 1.0)),
+        );
+        canvas.restore();
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    let alpha_at = |x: usize, y: usize| px.pixels()[y * stride + x * 4 + 3];
+    assert_eq!(alpha_at(0, 0), 0, "top-left rounded corner is transparent");
+    assert_eq!(
+        alpha_at(15, 0),
+        0,
+        "top-right rounded corner is transparent"
+    );
+    assert_eq!(
+        alpha_at(0, 15),
+        0,
+        "bottom-left rounded corner is transparent"
+    );
+    assert_eq!(
+        alpha_at(15, 15),
+        0,
+        "bottom-right rounded corner is transparent"
+    );
+    assert!(alpha_at(8, 8) > 240, "center is fully opaque");
+    Ok(())
+}
+
+/// `concat_transform` with a translation moves subsequent draws. Drawing a
+/// 4x4 rect at (0,0) with a +6 horizontal translation must hit pixels in
+/// the (6..10, 0..4) region instead of the origin.
+#[test]
+fn concat_transform_translates_subsequent_draws() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(16, 8, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.save();
+        canvas.concat_transform(NativeAffine::translation(6.0, 0.0));
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+        );
+        canvas.restore();
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    let alpha_at = |x: usize, y: usize| px.pixels()[y * stride + x * 4 + 3];
+    assert_eq!(alpha_at(0, 0), 0, "origin stays empty after translation");
+    assert!(
+        alpha_at(7, 1) > 240,
+        "translated rect occupies (6..10, 0..4)"
+    );
+    Ok(())
+}
+
+/// `concat_transform` with a scale stretches subsequent draws. A 2x2 rect
+/// scaled 3x covers a 6x6 region.
+#[test]
+fn concat_transform_scales_subsequent_draws() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(8, 8, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.save();
+        canvas.concat_transform(NativeAffine::scale(3.0, 3.0));
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+        );
+        canvas.restore();
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    let alpha_at = |x: usize, y: usize| px.pixels()[y * stride + x * 4 + 3];
+    assert!(alpha_at(0, 0) > 240, "scaled rect covers origin");
+    assert!(alpha_at(5, 5) > 240, "scaled rect covers (5,5)");
+    assert_eq!(alpha_at(7, 7), 0, "outside the 6x6 region stays empty");
+    Ok(())
+}
+
+/// `canvas.scale(sx, sy)` is a convenience equivalent to
+/// `concat_transform(NativeAffine::scale(sx, sy))`.
+#[test]
+fn scale_method_matches_concat_scale_transform() -> Result<()> {
+    let backend = NativeBackend::new();
+    let render = |use_scale_helper: bool| -> Result<Vec<u8>> {
+        let mut surface = backend.create_surface(8, 8, SurfaceOptions::default())?;
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.save();
+            if use_scale_helper {
+                canvas.scale(2.0, 2.0);
+            } else {
+                canvas.concat_transform(NativeAffine::scale(2.0, 2.0));
+            }
+            canvas.draw_rect(
+                Rect::from_xywh(0.0, 0.0, 3.0, 3.0),
+                &NativePaint::fill(RgbaLinear::opaque(0.0, 1.0, 0.0)),
+            );
+            canvas.restore();
+        });
+        Ok(surface.read_pixels()?.into_pixels())
+    };
+    let helper = render(true)?;
+    let direct = render(false)?;
+    assert_eq!(helper, direct);
+    Ok(())
+}
+
+/// Layer opacity isolation: drawing two opaque rects inside a layer with
+/// `paint.alpha = 0.5` produces a different result than drawing each rect
+/// directly with alpha 0.5. The layer composes the two rects internally
+/// (last-wins for src-over) and only halves the final layer; the direct
+/// approach blends each rect at 0.5 onto the destination, leaving residual
+/// color from earlier rects.
+#[test]
+fn save_layer_opacity_isolates_inner_compositing() -> Result<()> {
+    let backend = NativeBackend::new();
+
+    let mut layered = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    layered.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::opaque(0.0, 0.0, 0.0));
+        let mut layer_paint = NativePaint::default();
+        layer_paint.set_alpha(0.5);
+        canvas.save_layer(Some(&layer_paint));
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+        );
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
+            &NativePaint::fill(RgbaLinear::opaque(0.0, 1.0, 0.0)),
+        );
+        canvas.restore();
+    });
+
+    let mut direct = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    direct.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::opaque(0.0, 0.0, 0.0));
+        let mut red = NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0));
+        red.set_alpha(0.5);
+        canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 4.0, 4.0), &red);
+        let mut green = NativePaint::fill(RgbaLinear::opaque(0.0, 1.0, 0.0));
+        green.set_alpha(0.5);
+        canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 4.0, 4.0), &green);
+    });
+
+    let l = layered.read_pixels()?;
+    let d = direct.read_pixels()?;
+    let lr = l.pixels()[0];
+    let dr = d.pixels()[0];
+    assert!(
+        lr < dr.saturating_sub(16),
+        "layer should hide red residual: layered_r={lr} direct_r={dr}"
+    );
+    Ok(())
+}
+
+/// Layer blend mode applies on layer composite, not per-draw. Drawing a
+/// red rect inside a `PlusLighter` layer onto a non-trivial background
+/// gives a different result than drawing the red rect directly with
+/// `PlusLighter`.
+#[test]
+fn save_layer_blend_mode_applies_to_layer_composite() -> Result<()> {
+    let backend = NativeBackend::new();
+
+    let mut layered = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    layered.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::opaque(0.4, 0.4, 0.4));
+        let mut layer_paint = NativePaint::default();
+        layer_paint.set_blend_mode(BlendMode::PlusLighter);
+        canvas.save_layer(Some(&layer_paint));
+        // Two draws inside the layer: only the layer composite uses
+        // PlusLighter, the inner draws use src-over by default.
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
+            &NativePaint::fill(RgbaLinear::opaque(0.5, 0.0, 0.0)),
+        );
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
+            &NativePaint::fill(RgbaLinear::opaque(0.0, 0.5, 0.0)),
+        );
+        canvas.restore();
+    });
+
+    let mut direct = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    direct.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::opaque(0.4, 0.4, 0.4));
+        let mut a = NativePaint::fill(RgbaLinear::opaque(0.5, 0.0, 0.0));
+        a.set_blend_mode(BlendMode::PlusLighter);
+        canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 4.0, 4.0), &a);
+        let mut b = NativePaint::fill(RgbaLinear::opaque(0.0, 0.5, 0.0));
+        b.set_blend_mode(BlendMode::PlusLighter);
+        canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 4.0, 4.0), &b);
+    });
+
+    let l = layered.read_pixels()?;
+    let d = direct.read_pixels()?;
+    assert_ne!(
+        &l.pixels()[..4],
+        &d.pixels()[..4],
+        "layered PlusLighter must differ from sequential PlusLighter"
+    );
+    Ok(())
+}
+
+/// `draw_surface` composites a source surface's pixels onto this canvas at
+/// `(x, y)`. A 4x4 red source drawn at (2, 2) on an 8x8 destination must
+/// fill exactly the 4x4 region at that offset.
+#[test]
+fn draw_surface_composites_at_offset() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut source = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    source.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::opaque(1.0, 0.0, 0.0));
+    });
+
+    let mut dest = backend.create_surface(8, 8, SurfaceOptions::default())?;
+    dest.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_surface(&mut source, 2.0, 2.0, None);
+    });
+    let px = dest.read_pixels()?;
+    let stride = px.stride();
+    let alpha_at = |x: usize, y: usize| px.pixels()[y * stride + x * 4 + 3];
+    let red_at = |x: usize, y: usize| px.pixels()[y * stride + x * 4];
+    assert_eq!(alpha_at(0, 0), 0, "outside source bounds stays transparent");
+    assert!(red_at(3, 3) > 240, "source red opaque at offset");
+    assert!(red_at(5, 5) > 240, "source red opaque at offset");
+    assert_eq!(
+        alpha_at(6, 6),
+        0,
+        "right of source bounds stays transparent"
+    );
+    Ok(())
+}
+
+/// `draw_surface` honours the optional paint's alpha multiplier so the
+/// destination receives a half-strength composite when alpha is 0.5.
+#[test]
+fn draw_surface_with_paint_modulates_alpha() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut source = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    source.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::opaque(1.0, 0.0, 0.0));
+    });
+
+    let mut dest = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    dest.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        let mut paint = NativePaint::default();
+        paint.set_alpha(0.5);
+        canvas.draw_surface(&mut source, 0.0, 0.0, Some(&paint));
+    });
+    let px = dest.read_pixels()?;
+    let alpha = px.pixels()[3];
+    assert!((110..=145).contains(&alpha), "alpha 0.5 ≈ 128, got {alpha}");
     Ok(())
 }

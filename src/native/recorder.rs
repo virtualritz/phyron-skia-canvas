@@ -1,16 +1,17 @@
 use skia_safe::{
-    Canvas as SkCanvas, Color4f, ColorType, ImageInfo, Paint, Point as SkPoint, RRect,
-    Rect as SkRect,
+    Canvas as SkCanvas, Color4f, ColorType, ImageInfo, Matrix, Paint, Point as SkPoint, RRect,
+    Rect as SkRect, canvas::SaveLayerRec,
 };
 
 use crate::context::page::{ExportOptions, PageRecorder};
 use crate::gpu::RenderingEngine;
 use crate::native::color::RgbaLinear;
 use crate::native::error::NativeError;
-use crate::native::geometry::{Point, Rect};
+use crate::native::geometry::{NativeAffine, Point, Rect};
 use crate::native::image::NativeImage;
 use crate::native::paint::NativePaint;
 use crate::native::pixels::{RawFrame, RawFrameOptions, SurfaceOptions};
+use crate::native::surface::NativeSurface;
 use crate::native::text::{TextAlign, TextBoxOptions, VerticalAlign};
 
 pub struct NativeRecorder {
@@ -126,6 +127,70 @@ impl NativeCanvas<'_> {
     pub fn rotate_degrees(&mut self, degrees: f32, pivot: Option<Point>) {
         let pivot = pivot.map(|p| SkPoint::new(p.x, p.y));
         self.canvas.rotate(degrees, pivot);
+    }
+
+    pub fn scale(&mut self, sx: f32, sy: f32) {
+        self.canvas.scale((sx, sy));
+    }
+
+    /// Concatenate an affine transform onto the current canvas matrix.
+    /// `transform` is in `[a, b, c, d, tx, ty]` form (CSS DOMMatrix2DInit).
+    pub fn concat_transform(&mut self, transform: NativeAffine) {
+        let matrix = Matrix::from_affine(&[
+            transform.a,
+            transform.b,
+            transform.c,
+            transform.d,
+            transform.tx,
+            transform.ty,
+        ]);
+        self.canvas.concat(&matrix);
+    }
+
+    /// Push an isolated drawing layer. Subsequent draws accumulate into the
+    /// layer until `restore()`; on restore the layer is composited onto the
+    /// destination using `paint`'s alpha, blend mode, and (eventually)
+    /// filters. Pass `None` for a transparent isolation buffer with default
+    /// composition.
+    pub fn save_layer(&mut self, paint: Option<&NativePaint>) {
+        if let Some(p) = paint {
+            let sk_paint = p.to_skia_paint();
+            let rec = SaveLayerRec::default().paint(&sk_paint);
+            self.canvas.save_layer(&rec);
+        } else {
+            let rec = SaveLayerRec::default();
+            self.canvas.save_layer(&rec);
+        }
+    }
+
+    /// Intersect the current clip with `rect`. Subsequent draws outside the
+    /// clip are discarded. Pair with `save()`/`restore()` to scope the clip.
+    pub fn clip_rect(&mut self, rect: Rect) {
+        self.canvas.clip_rect(to_sk_rect(rect), None, true);
+    }
+
+    /// Intersect the current clip with the rounded rect formed by `rect` and
+    /// the given corner `radius`.
+    pub fn clip_rrect(&mut self, rect: Rect, radius: f32) {
+        let rrect = RRect::new_rect_xy(to_sk_rect(rect), radius, radius);
+        self.canvas.clip_rrect(rrect, None, true);
+    }
+
+    /// Composite `source`'s current contents onto this canvas at `(x, y)`.
+    /// Optional `paint` controls alpha and blend mode of the composite. The
+    /// source is snapshotted internally; the source is borrowed mutably
+    /// because Skia requires mut access for snapshotting.
+    pub fn draw_surface(
+        &mut self,
+        source: &mut NativeSurface,
+        x: f32,
+        y: f32,
+        paint: Option<&NativePaint>,
+    ) {
+        let image = source.snapshot();
+        let sk_paint = paint.map(|p| p.to_skia_paint());
+        self.canvas
+            .draw_image(&image.inner, SkPoint::new(x, y), sk_paint.as_ref());
     }
 
     pub fn draw_rect(&mut self, rect: Rect, paint: &NativePaint) {

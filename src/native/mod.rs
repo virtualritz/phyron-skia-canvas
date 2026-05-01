@@ -21,7 +21,7 @@ pub mod text;
 pub use backend::NativeBackend;
 pub use color::{LinearColorSpace, OutputColorSpace, RgbaLinear};
 pub use error::NativeError;
-pub use geometry::{Point, Rect, Size};
+pub use geometry::{NativeAffine, Point, Rect, Size};
 pub use image::NativeImage;
 pub use paint::{
     BlendMode, DashPattern, NativeColorFilter, NativeImageFilter, NativePaint, NativeShader,

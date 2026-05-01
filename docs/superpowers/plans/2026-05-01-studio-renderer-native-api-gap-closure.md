@@ -27,7 +27,12 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - Full `BlendMode` enum (Canvas-compatible plus `PlusLighter`).
   - `ShapePaint` removed -- `NativePaint::fill`/`stroke` constructors replace it.
   - 7 new tests cover defaults, constructors, alpha modulation, blend mode distinctness, every-blend-mode plumbing, stroke cap state, and dash state.
-- **Chunks 3B-8 (remaining of Task 6 plus Tasks 7-15): not started** -- canvas state and layers, paths, filters/shaders, raw image creation, SVG, font/paragraph, Studio adapter, docs.
+- **Chunk 3B (canvas state + layer subset of Task 6): complete** on the same branch.
+  - `NativeAffine` (CSS DOMMatrix2DInit form) with `IDENTITY`, `translation`, `scale`, `rotation_radians`, `rotation_degrees` constructors.
+  - `NativeCanvas::scale`, `concat_transform`, `save_layer(Option<&NativePaint>)`, `clip_rect`, `clip_rrect`, `draw_surface`.
+  - 9 new tests cover: clip_rect masking, clip_rrect rounded corners, transform translation, transform scale, scale-helper-equals-affine, layer opacity isolation, layer blend isolation, draw_surface offset, draw_surface with paint alpha.
+  - `clip_path`, `draw_line`, `NativePath`, `draw_path`, `draw_image`, `draw_image_src`, `SamplingMode` are deferred to Chunk 3C.
+- **Chunks 3C-8 (paths/sampling, filters/shaders, raw image creation, SVG, font/paragraph, Studio adapter, docs): not started.**
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:
@@ -282,23 +287,23 @@ Steps:
 
 Steps:
 
-- [ ] Add `save_layer(paint: Option<&NativePaint>)`.
-- [ ] Add `scale(sx, sy)`.
-- [ ] Add `concat_transform()` with an affine matrix options type. This covers future transforms without exposing Skia matrices.
+- [x] Add `save_layer(paint: Option<&NativePaint>)`.
+- [x] Add `scale(sx, sy)`.
+- [x] Add `concat_transform()` with an affine matrix options type. This covers future transforms without exposing Skia matrices.
 - [ ] Add `clip_rect()`, `clip_rrect()`, and `clip_path()`.
 - [ ] Add `draw_line()`.
 - [ ] Add `NativePath::from_svg(svg_path_data, fill_rule)`.
 - [ ] Add `draw_path(path, paint)`.
 - [ ] Add `draw_image(image, dst, paint, sampling)`.
 - [ ] Add `draw_image_src(image, src, dst, paint, sampling)`.
-- [ ] Add `draw_surface(surface, x, y, paint)`.
+- [x] Add `draw_surface(surface, x, y, paint)`.
 - [ ] Add `SamplingMode::{Nearest, Linear, Mipmapped}`.
 
 Tests:
 
 - [ ] Path fill rules render different pixels for `nonzero` vs `evenodd`.
-- [ ] Rounded clipping masks image corners.
-- [ ] `save_layer()` applies opacity/filter/blend only to the isolated layer.
+- [x] Rounded clipping masks image corners.
+- [x] `save_layer()` applies opacity/filter/blend only to the isolated layer.
 - [ ] `plus-lighter` accumulation does not clamp on F16/F32 surfaces.
 - [ ] `draw_image_src()` crops the expected source rect.
 - [ ] `draw_image(..., SamplingMode::Nearest)` keeps hard edges for preprocessed Citra output.
