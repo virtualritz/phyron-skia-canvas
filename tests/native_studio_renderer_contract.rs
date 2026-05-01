@@ -1,17 +1,18 @@
 //! Renderer contract tests for the `phyron_skia_canvas::native` facade.
 //!
-//! Tests in this file exercise the surface and pixel IO subset (Chunk 2 of the
-//! Studio renderer gap closure plan). Path/filter/shader/font/paragraph tests
-//! land alongside their implementation chunks; this file intentionally avoids
-//! importing those types so the branch stays compiling and green.
+//! Tests in this file exercise the surface, pixel IO, and paint/blend
+//! subsets (Chunks 2 and 3A of the Studio renderer gap closure plan).
+//! Path/filter/shader/font/paragraph tests land alongside their
+//! implementation chunks; this file intentionally avoids importing those
+//! types so the branch stays compiling and green.
 //!
 //! Public-leak audit (run from repo root):
 //!   rg -n "pub .*skia_safe|pub .*FunctionContext|pub .*JsBox|pub .*Handle<|pub .*RefCell" src/native
 
 use anyhow::Result;
 use phyron_skia_canvas::native::{
-    LinearColorSpace, NativeBackend, PixelColorSpace, PixelDepth, PixelExportOptions, Rect,
-    RgbaLinear, ShapePaint, SurfaceOptions,
+    BlendMode, LinearColorSpace, NativeBackend, NativePaint, PaintStyle, PixelColorSpace,
+    PixelDepth, PixelExportOptions, Rect, RgbaLinear, StrokeCap, SurfaceOptions,
 };
 
 const ALPHA_HALF_U8: u8 = 128;
@@ -32,7 +33,7 @@ fn surface_create_clear_draw_snapshot_compose_readback() -> Result<()> {
         canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
         canvas.draw_rect(
             Rect::from_xywh(2.0, 2.0, 4.0, 4.0),
-            &ShapePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
         );
     });
 
@@ -171,7 +172,7 @@ fn premultiplied_alpha_preserved_across_read_modes() -> Result<()> {
         canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
         canvas.draw_rect(
             Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
-            &ShapePaint::fill(red_premul(0.5)),
+            &NativePaint::fill(red_premul(0.5)),
         );
     });
 
@@ -222,5 +223,177 @@ fn public_types_are_reachable_from_native_namespace_only() -> Result<()> {
         PixelDepth::F16,
         PixelExportOptions::default(),
     );
+    Ok(())
+}
+
+// --- Chunk 3A: paint and blend ---------------------------------------------
+
+#[test]
+fn native_paint_default_matches_canvas_defaults() {
+    let p = NativePaint::default();
+    assert_eq!(p.style, PaintStyle::Fill);
+    assert_eq!(p.stroke_width, 1.0);
+    assert_eq!(p.stroke_cap, StrokeCap::Butt);
+    assert!(p.dash.is_none());
+    assert!(p.anti_alias);
+    assert_eq!(p.alpha, 1.0);
+    assert_eq!(p.blend_mode, BlendMode::SourceOver);
+    assert!(p.shader.is_none());
+    assert!(p.image_filter.is_none());
+    assert!(p.color_filter.is_none());
+}
+
+#[test]
+fn native_paint_constructors_set_style() {
+    let f = NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0));
+    assert_eq!(f.style, PaintStyle::Fill);
+    let s = NativePaint::stroke(RgbaLinear::opaque(0.0, 1.0, 0.0), 3.5);
+    assert_eq!(s.style, PaintStyle::Stroke);
+    assert_eq!(s.stroke_width, 3.5);
+}
+
+/// `paint.alpha` modulates the final color: a 1.0 paint produces ~255,
+/// while alpha 0.5 produces ~half pixel coverage on the same opaque red.
+#[test]
+fn native_paint_alpha_modulates_output() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut full = backend.create_surface(2, 2, SurfaceOptions::default())?;
+    full.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+        );
+    });
+    let full_px = full.read_pixels()?;
+    assert!(full_px.pixels()[0] > 240, "full alpha red ≈ 255");
+    assert_eq!(full_px.pixels()[3], 255);
+
+    let mut half = backend.create_surface(2, 2, SurfaceOptions::default())?;
+    half.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        let mut paint = NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0));
+        paint.set_alpha(0.5);
+        canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 2.0, 2.0), &paint);
+    });
+    let half_px = half.read_pixels()?;
+    let alpha_byte = half_px.pixels()[3];
+    assert!(
+        (110..=145).contains(&alpha_byte),
+        "alpha 0.5 ≈ 128, got {alpha_byte}"
+    );
+    Ok(())
+}
+
+/// Different blend modes produce different output for the same overlap.
+/// Asserts SourceOver, Multiply, and PlusLighter all diverge.
+#[test]
+fn blend_modes_produce_distinct_outputs() -> Result<()> {
+    let backend = NativeBackend::new();
+    let render_with = |mode: BlendMode| -> Result<[u8; 4]> {
+        let mut surface = backend.create_surface(2, 2, SurfaceOptions::default())?;
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::opaque(0.5, 0.5, 0.5));
+            let mut paint = NativePaint::fill(RgbaLinear::opaque(0.5, 0.0, 0.5));
+            paint.set_blend_mode(mode);
+            canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 2.0, 2.0), &paint);
+        });
+        let px = surface.read_pixels()?;
+        Ok([
+            px.pixels()[0],
+            px.pixels()[1],
+            px.pixels()[2],
+            px.pixels()[3],
+        ])
+    };
+    let src_over = render_with(BlendMode::SourceOver)?;
+    let multiply = render_with(BlendMode::Multiply)?;
+    let plus_lighter = render_with(BlendMode::PlusLighter)?;
+    assert_ne!(src_over, multiply, "SourceOver and Multiply must differ");
+    assert_ne!(
+        src_over, plus_lighter,
+        "SourceOver and PlusLighter must differ"
+    );
+    assert_ne!(
+        multiply, plus_lighter,
+        "Multiply and PlusLighter must differ"
+    );
+    Ok(())
+}
+
+/// Exhaustive blend-mode plumbing: every Canvas blend mode round-trips
+/// through to a non-panicking draw and a successful pixel readback. This
+/// catches typos in the `to_skia` mapping.
+#[test]
+fn every_blend_mode_renders_without_error() -> Result<()> {
+    let backend = NativeBackend::new();
+    let modes = [
+        BlendMode::SourceOver,
+        BlendMode::SourceIn,
+        BlendMode::SourceOut,
+        BlendMode::SourceAtop,
+        BlendMode::DestinationOver,
+        BlendMode::DestinationIn,
+        BlendMode::DestinationOut,
+        BlendMode::DestinationAtop,
+        BlendMode::Copy,
+        BlendMode::Xor,
+        BlendMode::Multiply,
+        BlendMode::Screen,
+        BlendMode::Overlay,
+        BlendMode::Darken,
+        BlendMode::Lighten,
+        BlendMode::ColorDodge,
+        BlendMode::ColorBurn,
+        BlendMode::HardLight,
+        BlendMode::SoftLight,
+        BlendMode::Difference,
+        BlendMode::Exclusion,
+        BlendMode::Hue,
+        BlendMode::Saturation,
+        BlendMode::Color,
+        BlendMode::Luminosity,
+        BlendMode::PlusLighter,
+    ];
+    for mode in modes {
+        let mut surface = backend.create_surface(2, 2, SurfaceOptions::default())?;
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::opaque(0.4, 0.4, 0.4));
+            let mut paint = NativePaint::fill(RgbaLinear::opaque(0.6, 0.2, 0.8));
+            paint.set_blend_mode(mode);
+            canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 2.0, 2.0), &paint);
+        });
+        let _ = surface.read_pixels()?;
+    }
+    Ok(())
+}
+
+/// State-level checks for stroke cap and dash. Visual verification waits
+/// for Chunk 3C (`draw_line` / `draw_path`); rectangles use joins not
+/// caps, so stroke caps are not visually exercised on `draw_rect`.
+#[test]
+fn stroke_cap_state_round_trips_through_paint() {
+    let mut paint = NativePaint::stroke(RgbaLinear::opaque(1.0, 1.0, 1.0), 4.0);
+    assert_eq!(paint.stroke_cap, StrokeCap::Butt);
+    paint.set_stroke_cap(StrokeCap::Round);
+    assert_eq!(paint.stroke_cap, StrokeCap::Round);
+    paint.set_stroke_cap(StrokeCap::Square);
+    assert_eq!(paint.stroke_cap, StrokeCap::Square);
+}
+
+#[test]
+fn dash_pattern_state_round_trips_through_paint() -> Result<()> {
+    let mut paint = NativePaint::stroke(RgbaLinear::opaque(1.0, 1.0, 1.0), 2.0);
+    assert!(paint.dash.is_none());
+    paint.set_dash(vec![4.0, 4.0], 0.0);
+    let dash = paint
+        .dash
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("dash should be set after set_dash"))?;
+    assert_eq!(dash.intervals, vec![4.0, 4.0]);
+    assert_eq!(dash.phase, 0.0);
+    let _ = dash; // release immutable borrow before clear_dash takes &mut.
+    paint.clear_dash();
+    assert!(paint.dash.is_none());
     Ok(())
 }

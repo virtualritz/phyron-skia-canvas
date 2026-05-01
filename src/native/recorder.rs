@@ -1,5 +1,5 @@
 use skia_safe::{
-    Canvas as SkCanvas, Color4f, ColorType, ImageInfo, Paint, PaintStyle, Point as SkPoint, RRect,
+    Canvas as SkCanvas, Color4f, ColorType, ImageInfo, Paint, Point as SkPoint, RRect,
     Rect as SkRect,
 };
 
@@ -9,7 +9,7 @@ use crate::native::color::RgbaLinear;
 use crate::native::error::NativeError;
 use crate::native::geometry::{Point, Rect};
 use crate::native::image::NativeImage;
-use crate::native::paint::ShapePaint;
+use crate::native::paint::NativePaint;
 use crate::native::pixels::{RawFrame, RawFrameOptions, SurfaceOptions};
 use crate::native::text::{TextAlign, TextBoxOptions, VerticalAlign};
 
@@ -128,56 +128,19 @@ impl NativeCanvas<'_> {
         self.canvas.rotate(degrees, pivot);
     }
 
-    pub fn draw_rect(&mut self, rect: Rect, paint: &ShapePaint) {
-        let sk_rect = to_sk_rect(rect);
-        if let Some(fill) = paint.fill {
-            let p = make_paint(fill, PaintStyle::Fill, 0.0, paint.anti_alias);
-            self.canvas.draw_rect(sk_rect, &p);
-        }
-        if let Some(stroke) = paint.stroke {
-            let p = make_paint(
-                stroke,
-                PaintStyle::Stroke,
-                paint.stroke_width,
-                paint.anti_alias,
-            );
-            self.canvas.draw_rect(sk_rect, &p);
-        }
+    pub fn draw_rect(&mut self, rect: Rect, paint: &NativePaint) {
+        self.canvas
+            .draw_rect(to_sk_rect(rect), &paint.to_skia_paint());
     }
 
-    pub fn draw_rounded_rect(&mut self, rect: Rect, radius: f32, paint: &ShapePaint) {
-        let sk_rect = to_sk_rect(rect);
-        let rrect = RRect::new_rect_xy(sk_rect, radius, radius);
-        if let Some(fill) = paint.fill {
-            let p = make_paint(fill, PaintStyle::Fill, 0.0, paint.anti_alias);
-            self.canvas.draw_rrect(rrect, &p);
-        }
-        if let Some(stroke) = paint.stroke {
-            let p = make_paint(
-                stroke,
-                PaintStyle::Stroke,
-                paint.stroke_width,
-                paint.anti_alias,
-            );
-            self.canvas.draw_rrect(rrect, &p);
-        }
+    pub fn draw_rounded_rect(&mut self, rect: Rect, radius: f32, paint: &NativePaint) {
+        let rrect = RRect::new_rect_xy(to_sk_rect(rect), radius, radius);
+        self.canvas.draw_rrect(rrect, &paint.to_skia_paint());
     }
 
-    pub fn draw_oval(&mut self, rect: Rect, paint: &ShapePaint) {
-        let sk_rect = to_sk_rect(rect);
-        if let Some(fill) = paint.fill {
-            let p = make_paint(fill, PaintStyle::Fill, 0.0, paint.anti_alias);
-            self.canvas.draw_oval(sk_rect, &p);
-        }
-        if let Some(stroke) = paint.stroke {
-            let p = make_paint(
-                stroke,
-                PaintStyle::Stroke,
-                paint.stroke_width,
-                paint.anti_alias,
-            );
-            self.canvas.draw_oval(sk_rect, &p);
-        }
+    pub fn draw_oval(&mut self, rect: Rect, paint: &NativePaint) {
+        self.canvas
+            .draw_oval(to_sk_rect(rect), &paint.to_skia_paint());
     }
 
     pub fn draw_image_rect(&mut self, image: &NativeImage, dst: Rect, opacity: f32) {
@@ -258,13 +221,4 @@ fn to_unpremul_color4f(c: RgbaLinear) -> Color4f {
     } else {
         Color4f::new(0.0, 0.0, 0.0, 0.0)
     }
-}
-
-fn make_paint(color: RgbaLinear, style: PaintStyle, stroke_width: f32, anti_alias: bool) -> Paint {
-    let mut paint = Paint::default();
-    paint.set_color4f(to_unpremul_color4f(color), None);
-    paint.set_style(style);
-    paint.set_stroke_width(stroke_width);
-    paint.set_anti_alias(anti_alias);
-    paint
 }

@@ -21,8 +21,14 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - `PixelColorSpace` (6 variants), `PixelDepth` (Uint8/F16/F32), `PixelExportOptions`, `ExportedPixels`.
   - `read_pixels`, `read_pixels_raw`, `read_pixels_as`, `read_pixels_linear`, `write_pixels`, `write_pixels_linear`.
   - 7 contract tests in `tests/native_studio_renderer_contract.rs` -- all green.
-- **Chunks 3-8 (Tasks 5-15): not started** -- paint/blend/path, filters/shaders, raw image creation, SVG, font/paragraph, Studio adapter, docs.
-- Per reviewer feedback, tests for Chunks 3-5 were not pre-written -- they will land alongside their implementation chunks to keep every commit green.
+- **Chunk 3A (Task 5): complete** on the same branch. Per reviewer feedback Chunk 3 was sub-split:
+  - `NativePaint` with color/style/stroke_width/stroke_cap/dash/anti_alias/alpha/blend_mode plus `Option<NativeShader/ImageFilter/ColorFilter>` typed placeholders.
+  - `PaintStyle::{Fill, Stroke}`, `StrokeCap::{Butt, Round, Square}`, `DashPattern`.
+  - Full `BlendMode` enum (Canvas-compatible plus `PlusLighter`).
+  - `ShapePaint` removed -- `NativePaint::fill`/`stroke` constructors replace it.
+  - 7 new tests cover defaults, constructors, alpha modulation, blend mode distinctness, every-blend-mode plumbing, stroke cap state, and dash state.
+- **Chunks 3B-8 (remaining of Task 6 plus Tasks 7-15): not started** -- canvas state and layers, paths, filters/shaders, raw image creation, SVG, font/paragraph, Studio adapter, docs.
+- Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:
 
@@ -259,12 +265,12 @@ Tests:
 
 Steps:
 
-- [ ] Add `NativePaint` with color, alpha, style, stroke width, stroke cap, dash pattern, anti-alias, blend mode, shader, image filter, and color filter fields.
-- [ ] Add `PaintStyle::{Fill, Stroke}`.
-- [ ] Add `StrokeCap::{Butt, Round, Square}`.
-- [ ] Add `BlendMode` covering the full TypeScript `BlendMode` union from `packages/renderer/src/backend/types.ts`.
-- [ ] Keep `ShapePaint` as a convenience wrapper only if it can delegate to `NativePaint`.
-- [ ] Add `clone`/copy semantics that do not share mutable internal state unsafely.
+- [x] Add `NativePaint` with color, alpha, style, stroke width, stroke cap, dash pattern, anti-alias, blend mode, shader, image filter, and color filter fields.
+- [x] Add `PaintStyle::{Fill, Stroke}`.
+- [x] Add `StrokeCap::{Butt, Round, Square}`.
+- [x] Add `BlendMode` covering the full TypeScript `BlendMode` union from `packages/renderer/src/backend/types.ts`.
+- [x] Keep `ShapePaint` as a convenience wrapper only if it can delegate to `NativePaint`.
+- [x] Add `clone`/copy semantics that do not share mutable internal state unsafely.
 
 ### Task 6: Expand `NativeCanvas`.
 
