@@ -10,6 +10,7 @@
 pub mod backend;
 pub mod color;
 pub mod error;
+pub mod filter;
 pub mod geometry;
 pub mod image;
 pub mod paint;
@@ -22,12 +23,10 @@ pub mod text;
 pub use backend::NativeBackend;
 pub use color::{LinearColorSpace, OutputColorSpace, RgbaLinear};
 pub use error::NativeError;
+pub use filter::{NativeColorFilter, NativeImageFilter};
 pub use geometry::{NativeAffine, Point, Rect, Size};
 pub use image::NativeImage;
-pub use paint::{
-    BlendMode, DashPattern, NativeColorFilter, NativeImageFilter, NativePaint, NativeShader,
-    PaintStyle, StrokeCap,
-};
+pub use paint::{BlendMode, DashPattern, NativePaint, NativeShader, PaintStyle, StrokeCap};
 pub use path::{FillRule, NativePath};
 pub use pixels::{
     AlphaMode, ExportedPixels, PixelColorSpace, PixelDepth, PixelExportOptions, PixelFormat,

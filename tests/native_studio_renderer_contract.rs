@@ -11,9 +11,9 @@
 
 use anyhow::Result;
 use phyron_skia_canvas::native::{
-    BlendMode, FillRule, LinearColorSpace, NativeAffine, NativeBackend, NativePaint, NativePath,
-    PaintStyle, PixelColorSpace, PixelDepth, PixelExportOptions, Point, Rect, RgbaLinear,
-    SamplingMode, StrokeCap, SurfaceOptions,
+    BlendMode, FillRule, LinearColorSpace, NativeAffine, NativeBackend, NativeColorFilter,
+    NativeImageFilter, NativePaint, NativePath, PaintStyle, PixelColorSpace, PixelDepth,
+    PixelExportOptions, Point, Rect, RgbaLinear, SamplingMode, StrokeCap, SurfaceOptions,
 };
 
 const ALPHA_HALF_U8: u8 = 128;
@@ -1003,5 +1003,223 @@ fn sampling_linear_and_mipmapped_smoke() -> Result<()> {
             "{mode:?} should produce non-zero pixels"
         );
     }
+    Ok(())
+}
+
+// --- Chunk 4A: filters and color filters -----------------------------------
+
+/// Blur softens and expands non-transparent regions: pixels just outside
+/// the original sharp rect must gain non-zero alpha.
+#[test]
+fn image_filter_blur_expands_alpha() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(16, 16, SurfaceOptions::default())?;
+    let mut paint = NativePaint::fill(RgbaLinear::opaque(1.0, 1.0, 1.0));
+    paint.set_image_filter(Some(NativeImageFilter::blur(3.0, 3.0, None)?));
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_rect(Rect::from_xywh(6.0, 6.0, 4.0, 4.0), &paint);
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    let alpha_at = |x: usize, y: usize| px.pixels()[y * stride + x * 4 + 3];
+    // Interior alpha softens under strong blur but remains substantially
+    // above zero.
+    assert!(
+        alpha_at(7, 7) > 32,
+        "rect interior keeps alpha under blur, got {}",
+        alpha_at(7, 7)
+    );
+    // Just outside the rect on each side: blur leaks alpha into the halo.
+    assert!(alpha_at(4, 8) > 8, "left of rect should have blur halo");
+    assert!(alpha_at(11, 8) > 8, "right of rect should have blur halo");
+    assert!(alpha_at(8, 4) > 8, "above rect should have blur halo");
+    assert!(alpha_at(8, 11) > 8, "below rect should have blur halo");
+    Ok(())
+}
+
+/// Drop shadow renders an offset blur of the source. Pixels at the offset
+/// position (outside the source rect) must show the shadow color.
+#[test]
+fn image_filter_drop_shadow_offsets_pixels() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(16, 16, SurfaceOptions::default())?;
+    let mut paint = NativePaint::fill(RgbaLinear::opaque(1.0, 1.0, 1.0));
+    paint.set_image_filter(Some(NativeImageFilter::drop_shadow(
+        4.0,
+        4.0,
+        1.0,
+        1.0,
+        RgbaLinear::opaque(1.0, 0.0, 0.0),
+        None,
+    )?));
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_rect(Rect::from_xywh(2.0, 2.0, 4.0, 4.0), &paint);
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    // The shadow centers at (offset + rect): around (6..10, 6..10). Sample
+    // a pixel inside the shadow region (well outside the source rect).
+    let off = 8 * stride + 8 * 4;
+    let r = px.pixels()[off];
+    let a = px.pixels()[off + 3];
+    assert!(a > 32, "drop shadow region has alpha: {a}");
+    assert!(r > 64, "drop shadow region carries shadow red: r={r}");
+    Ok(())
+}
+
+/// A color matrix can replace RGB. Using a matrix that swaps red and blue,
+/// drawing a blue rect produces red pixels.
+#[test]
+fn image_filter_color_matrix_replaces_rgb() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    // Swap red and blue (rows are RGBA; columns are R G B A offset).
+    let swap_rb: [f32; 20] = [
+        0.0, 0.0, 1.0, 0.0, 0.0, // r_out = b_in
+        0.0, 1.0, 0.0, 0.0, 0.0, // g_out = g_in
+        1.0, 0.0, 0.0, 0.0, 0.0, // b_out = r_in
+        0.0, 0.0, 0.0, 1.0, 0.0, // a_out = a_in
+    ];
+    let mut paint = NativePaint::fill(RgbaLinear::opaque(0.0, 0.0, 1.0));
+    paint.set_image_filter(Some(NativeImageFilter::color_matrix(swap_rb, None)?));
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 4.0, 4.0), &paint);
+    });
+    let px = surface.read_pixels()?;
+    let r = px.pixels()[0];
+    let b = px.pixels()[2];
+    assert!(r > 240, "red dominant after RB swap: {r}");
+    assert!(b < 16, "blue absent after RB swap: {b}");
+    Ok(())
+}
+
+/// `from_color_filter` wraps a color filter as an image filter and
+/// produces the same effect when applied via `paint.image_filter`.
+#[test]
+fn image_filter_from_color_filter_applies_as_image_filter() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    let cf = NativeColorFilter::linear_to_srgb_gamma();
+    let if_ = NativeImageFilter::from_color_filter(cf, None)?;
+    let mut paint = NativePaint::fill(RgbaLinear::opaque(0.5, 0.5, 0.5));
+    paint.set_image_filter(Some(if_));
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 4.0, 4.0), &paint);
+    });
+    let px = surface.read_pixels()?;
+    // Wrapping a color filter as an image filter should still produce
+    // non-zero pixels for an opaque draw.
+    assert!(px.pixels()[3] > 240, "opaque draw remains opaque");
+    Ok(())
+}
+
+/// Composing two image filters chains them: outer(inner(source)).
+/// Compose blur(8) outer with color_matrix(swap RB) inner. Inner runs first
+/// (turns blue source into red source in the filter pipeline), then blur
+/// expands. Sample outside the source rect: blurred red appears.
+#[test]
+fn image_filter_compose_chains_inner_then_outer() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(16, 16, SurfaceOptions::default())?;
+    let swap_rb: [f32; 20] = [
+        0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        1.0, 0.0,
+    ];
+    let inner = NativeImageFilter::color_matrix(swap_rb, None)?;
+    let outer = NativeImageFilter::blur(2.0, 2.0, None)?;
+    let composed = NativeImageFilter::compose(outer, inner)?;
+    let mut paint = NativePaint::fill(RgbaLinear::opaque(0.0, 0.0, 1.0));
+    paint.set_image_filter(Some(composed));
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_rect(Rect::from_xywh(6.0, 6.0, 4.0, 4.0), &paint);
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    let off = 8 * stride + 8 * 4;
+    let r = px.pixels()[off];
+    let b = px.pixels()[off + 2];
+    assert!(
+        r > 200,
+        "composed pipeline turned blue input into red: r={r}"
+    );
+    assert!(b < 32, "blue should be absent: b={b}");
+    Ok(())
+}
+
+/// Luma color filter: alpha = perceived luminance, RGB = 0. Drawing a white
+/// fill with luma applied keeps the surface visible (alpha 1); drawing a
+/// black fill becomes invisible (alpha 0). This is the building block for
+/// destination-in mask paths.
+#[test]
+fn color_filter_luma_maps_luminance_to_alpha() -> Result<()> {
+    let backend = NativeBackend::new();
+    let render_with = |color: RgbaLinear| -> Result<u8> {
+        let mut surface = backend.create_surface(2, 2, SurfaceOptions::default())?;
+        let mut paint = NativePaint::fill(color);
+        paint.set_color_filter(Some(NativeColorFilter::luma()));
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 2.0, 2.0), &paint);
+        });
+        let px = surface.read_pixels()?;
+        Ok(px.pixels()[3])
+    };
+    let white_alpha = render_with(RgbaLinear::opaque(1.0, 1.0, 1.0))?;
+    let black_alpha = render_with(RgbaLinear::opaque(0.0, 0.0, 0.0))?;
+    assert!(
+        white_alpha > 240,
+        "luma maps white -> high alpha, got {white_alpha}"
+    );
+    assert!(
+        black_alpha < 16,
+        "luma maps black -> ~0 alpha, got {black_alpha}"
+    );
+    Ok(())
+}
+
+/// `srgb_to_linear_gamma` and `linear_to_srgb_gamma` round-trip: applying
+/// inner srgb_to_linear and outer linear_to_srgb produces visually similar
+/// output to the original draw on an sRGB-coded readback.
+#[test]
+fn color_filter_gamma_round_trip_through_compose() -> Result<()> {
+    let backend = NativeBackend::new();
+    let direct = {
+        let mut surface = backend.create_surface(2, 2, SurfaceOptions::default())?;
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.draw_rect(
+                Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+                &NativePaint::fill(RgbaLinear::opaque(0.5, 0.5, 0.5)),
+            );
+        });
+        surface.read_pixels()?
+    };
+
+    let composed = {
+        let outer = NativeColorFilter::linear_to_srgb_gamma();
+        let inner = NativeColorFilter::srgb_to_linear_gamma();
+        let cf = NativeColorFilter::compose(outer, inner)?;
+        let mut paint = NativePaint::fill(RgbaLinear::opaque(0.5, 0.5, 0.5));
+        paint.set_color_filter(Some(cf));
+        let mut surface = backend.create_surface(2, 2, SurfaceOptions::default())?;
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 2.0, 2.0), &paint);
+        });
+        surface.read_pixels()?
+    };
+
+    let dr = (direct.pixels()[0] as i16 - composed.pixels()[0] as i16).abs();
+    let dg = (direct.pixels()[1] as i16 - composed.pixels()[1] as i16).abs();
+    let db = (direct.pixels()[2] as i16 - composed.pixels()[2] as i16).abs();
+    assert!(
+        dr <= 8 && dg <= 8 && db <= 8,
+        "gamma round-trip differs by at most 8/255: dr={dr} dg={dg} db={db}"
+    );
     Ok(())
 }

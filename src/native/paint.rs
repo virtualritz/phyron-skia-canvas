@@ -4,6 +4,7 @@ use skia_safe::{
 };
 
 use crate::native::color::RgbaLinear;
+use crate::native::filter::{NativeColorFilter, NativeImageFilter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum PaintStyle {
@@ -94,23 +95,11 @@ impl BlendMode {
     }
 }
 
-/// Opaque shader handle. Factory methods land with Chunk 4 (filters/shaders).
+/// Opaque shader handle. Factory methods land with Chunk 4B (shaders).
 /// Field is private so this type cannot be constructed by external callers
 /// until factories exist.
 #[derive(Debug, Clone)]
 pub struct NativeShader {
-    _private: (),
-}
-
-/// Opaque image filter handle. Factory methods land with Chunk 4.
-#[derive(Debug, Clone)]
-pub struct NativeImageFilter {
-    _private: (),
-}
-
-/// Opaque color filter handle. Factory methods land with Chunk 4.
-#[derive(Debug, Clone)]
-pub struct NativeColorFilter {
     _private: (),
 }
 
@@ -214,6 +203,16 @@ impl NativePaint {
         self
     }
 
+    pub fn set_image_filter(&mut self, filter: Option<NativeImageFilter>) -> &mut Self {
+        self.image_filter = filter;
+        self
+    }
+
+    pub fn set_color_filter(&mut self, filter: Option<NativeColorFilter>) -> &mut Self {
+        self.color_filter = filter;
+        self
+    }
+
     pub(crate) fn to_skia_paint(&self) -> SkPaint {
         let mut paint = SkPaint::default();
         let modulated = self.color.with_opacity(self.alpha);
@@ -244,6 +243,12 @@ impl NativePaint {
             && let Some(effect) = dash_path_effect::new(&dash.intervals, dash.phase)
         {
             paint.set_path_effect(effect);
+        }
+        if let Some(filter) = &self.image_filter {
+            paint.set_image_filter(filter.inner.clone());
+        }
+        if let Some(filter) = &self.color_filter {
+            paint.set_color_filter(filter.inner.clone());
         }
         paint
     }

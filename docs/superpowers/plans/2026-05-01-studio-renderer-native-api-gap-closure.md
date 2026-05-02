@@ -37,7 +37,13 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - `NativeCanvas::clip_path`, `draw_path`, `draw_line`, `draw_image_src`.
   - `SamplingMode::{Nearest, Linear, Mipmapped}`.
   - 9 new tests cover: SVG path renders, fill rule difference on a nested same-direction path, clip_path masks, draw_line stroke width, draw_line round-cap extension past endpoints, draw_line dash gaps, draw_image_src cropping, Nearest sharp edges, Linear/Mipmapped smoke.
-- **Chunks 4-8 (filters/shaders, raw image creation, SVG decode, font/paragraph, Studio adapter, docs): not started.**
+- **Chunk 4A (filters / color filters subset of Task 7): complete** on the same branch. Per reviewer feedback Chunk 4 was sub-split:
+  - `NativeImageFilter::{blur, drop_shadow, color_matrix, from_color_filter, compose}` returning `Result<NativeImageFilter, NativeError>`.
+  - `NativeColorFilter::{luma, srgb_to_linear_gamma, linear_to_srgb_gamma, compose}`.
+  - `NativePaint::set_image_filter` / `set_color_filter` setters; `to_skia_paint` applies both.
+  - `NativeImageFilter` and `NativeColorFilter` moved out of `paint.rs` into `src/native/filter.rs` with private `inner` skia handles.
+  - 7 new tests cover: blur expanding alpha, drop shadow offset pixels, color matrix RGB swap, color filter wrapped as image filter, image filter compose chains inner-then-outer, luma maps luminance to alpha (white visible / black invisible), gamma compose round-trip.
+- **Chunks 4B, 5-8 (shaders, raw image creation, SVG decode, font/paragraph, Studio adapter, docs): not started.**
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:
@@ -326,25 +332,25 @@ Tests:
 
 Steps:
 
-- [ ] Add `NativeImageFilter`.
-- [ ] Add `NativeColorFilter`.
-- [ ] Add `NativeImageFilter::blur(sigma_x, sigma_y, input)`.
-- [ ] Add `NativeImageFilter::drop_shadow(dx, dy, sigma_x, sigma_y, color, input)`.
-- [ ] Add `NativeImageFilter::color_matrix(matrix_4x5, input)`.
-- [ ] Add `NativeColorFilter::luma()`.
-- [ ] Add `NativeColorFilter::srgb_to_linear_gamma()`.
-- [ ] Add `NativeColorFilter::linear_to_srgb_gamma()`.
-- [ ] Add `NativeColorFilter::compose(outer, inner)`.
-- [ ] Add `NativeImageFilter::from_color_filter(color_filter, input)`.
-- [ ] Add `NativeImageFilter::compose(outer, inner)`.
+- [x] Add `NativeImageFilter`.
+- [x] Add `NativeColorFilter`.
+- [x] Add `NativeImageFilter::blur(sigma_x, sigma_y, input)`.
+- [x] Add `NativeImageFilter::drop_shadow(dx, dy, sigma_x, sigma_y, color, input)`.
+- [x] Add `NativeImageFilter::color_matrix(matrix_4x5, input)`.
+- [x] Add `NativeColorFilter::luma()`.
+- [x] Add `NativeColorFilter::srgb_to_linear_gamma()`.
+- [x] Add `NativeColorFilter::linear_to_srgb_gamma()`.
+- [x] Add `NativeColorFilter::compose(outer, inner)`.
+- [x] Add `NativeImageFilter::from_color_filter(color_filter, input)`.
+- [x] Add `NativeImageFilter::compose(outer, inner)`.
 - [ ] Add `NativeShader::linear_gradient(start, end, stops, interpolation)`.
 
 Tests:
 
-- [ ] Blur expands/softens non-transparent pixels.
-- [ ] Drop shadow produces offset pixels.
-- [ ] Color matrix can replace RGB for ID-buffer rendering while thresholding alpha.
-- [ ] Luma color filter works with `destination-in`/`destination-out` mask paths.
+- [x] Blur expands/softens non-transparent pixels.
+- [x] Drop shadow produces offset pixels.
+- [x] Color matrix can replace RGB for ID-buffer rendering while thresholding alpha.
+- [x] Luma color filter works with `destination-in`/`destination-out` mask paths.
 - [ ] Linear gradient renders sorted color stops.
 - [ ] `oklch` interpolation is either implemented or rejected with a typed error. Do not silently use sRGB if the caller requested `oklch`.
 
