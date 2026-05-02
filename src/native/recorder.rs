@@ -1,6 +1,7 @@
 use skia_safe::{
     Canvas as SkCanvas, Color4f, ColorType, ImageInfo, Matrix, Paint, Point as SkPoint, RRect,
-    Rect as SkRect, canvas::SaveLayerRec,
+    Rect as SkRect,
+    canvas::{SaveLayerRec, SrcRectConstraint},
 };
 
 use crate::context::page::{ExportOptions, PageRecorder};
@@ -10,7 +11,8 @@ use crate::native::error::NativeError;
 use crate::native::geometry::{NativeAffine, Point, Rect};
 use crate::native::image::NativeImage;
 use crate::native::paint::NativePaint;
-use crate::native::pixels::{RawFrame, RawFrameOptions, SurfaceOptions};
+use crate::native::path::NativePath;
+use crate::native::pixels::{RawFrame, RawFrameOptions, SamplingMode, SurfaceOptions};
 use crate::native::surface::NativeSurface;
 use crate::native::text::{TextAlign, TextBoxOptions, VerticalAlign};
 
@@ -174,6 +176,55 @@ impl NativeCanvas<'_> {
     pub fn clip_rrect(&mut self, rect: Rect, radius: f32) {
         let rrect = RRect::new_rect_xy(to_sk_rect(rect), radius, radius);
         self.canvas.clip_rrect(rrect, None, true);
+    }
+
+    /// Intersect the current clip with `path`. The path's fill rule decides
+    /// which interior regions are kept.
+    pub fn clip_path(&mut self, path: &NativePath) {
+        self.canvas.clip_path(&path.inner, None, true);
+    }
+
+    /// Fill or stroke `path` according to `paint`. The path's fill rule
+    /// (`NonZero` / `EvenOdd`) decides interior coverage on fills.
+    pub fn draw_path(&mut self, path: &NativePath, paint: &NativePaint) {
+        self.canvas.draw_path(&path.inner, &paint.to_skia_paint());
+    }
+
+    /// Stroke a line segment from `p1` to `p2` using the paint's stroke
+    /// width, cap, dash, and anti-alias state. The paint should be a
+    /// stroke-style paint; fill style produces no output.
+    pub fn draw_line(&mut self, p1: Point, p2: Point, paint: &NativePaint) {
+        self.canvas.draw_line(
+            SkPoint::new(p1.x, p1.y),
+            SkPoint::new(p2.x, p2.y),
+            &paint.to_skia_paint(),
+        );
+    }
+
+    /// Draw the `src` rect of `image` into the `dst` rect on this canvas
+    /// using the given sampling mode. Optional `paint` controls alpha and
+    /// blend mode of the composite. Pixels outside `src` are not sampled
+    /// (strict source rect constraint).
+    pub fn draw_image_src(
+        &mut self,
+        image: &NativeImage,
+        src: Rect,
+        dst: Rect,
+        paint: Option<&NativePaint>,
+        sampling: SamplingMode,
+    ) {
+        let src_rect = to_sk_rect(src);
+        let dst_rect = to_sk_rect(dst);
+        let sk_paint = paint.map(|p| p.to_skia_paint());
+        let default_paint = Paint::default();
+        let p_ref = sk_paint.as_ref().unwrap_or(&default_paint);
+        self.canvas.draw_image_rect_with_sampling_options(
+            &image.inner,
+            Some((&src_rect, SrcRectConstraint::Strict)),
+            dst_rect,
+            sampling.to_skia(),
+            p_ref,
+        );
     }
 
     /// Composite `source`'s current contents onto this canvas at `(x, y)`.

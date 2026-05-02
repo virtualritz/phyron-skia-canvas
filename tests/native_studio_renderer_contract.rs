@@ -11,8 +11,9 @@
 
 use anyhow::Result;
 use phyron_skia_canvas::native::{
-    BlendMode, LinearColorSpace, NativeAffine, NativeBackend, NativePaint, PaintStyle,
-    PixelColorSpace, PixelDepth, PixelExportOptions, Rect, RgbaLinear, StrokeCap, SurfaceOptions,
+    BlendMode, FillRule, LinearColorSpace, NativeAffine, NativeBackend, NativePaint, NativePath,
+    PaintStyle, PixelColorSpace, PixelDepth, PixelExportOptions, Point, Rect, RgbaLinear,
+    SamplingMode, StrokeCap, SurfaceOptions,
 };
 
 const ALPHA_HALF_U8: u8 = 128;
@@ -698,5 +699,309 @@ fn draw_surface_with_paint_modulates_alpha() -> Result<()> {
     let px = dest.read_pixels()?;
     let alpha = px.pixels()[3];
     assert!((110..=145).contains(&alpha), "alpha 0.5 ≈ 128, got {alpha}");
+    Ok(())
+}
+
+// --- Chunk 3C: paths, line, draw_image_src, sampling ----------------------
+
+/// SVG path data renders visible pixels.
+#[test]
+fn svg_path_draws_visible_pixels() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(8, 8, SurfaceOptions::default())?;
+    let path = NativePath::from_svg("M0 0 L8 0 L8 8 L0 8 Z", FillRule::NonZero)?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_path(&path, &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)));
+    });
+    let px = surface.read_pixels()?;
+    assert!(px.pixels()[3] > 240, "filled square covers (0,0)");
+    Ok(())
+}
+
+/// On a self-overlapping path (two same-direction concentric squares), the
+/// inner region winds twice. `NonZero` fills the inner region (count != 0);
+/// `EvenOdd` leaves the inner region empty (count mod 2 == 0). The two
+/// renderings must produce different pixels at the inner region's center.
+#[test]
+fn fill_rule_evenodd_differs_from_nonzero_on_nested_path() -> Result<()> {
+    let backend = NativeBackend::new();
+    // Two same-direction (CW) concentric squares: outer 8x8, inner 4x4 hole.
+    let svg = "M0 0 L8 0 L8 8 L0 8 Z M2 2 L6 2 L6 6 L2 6 Z";
+
+    let nonzero = {
+        let mut surface = backend.create_surface(8, 8, SurfaceOptions::default())?;
+        let path = NativePath::from_svg(svg, FillRule::NonZero)?;
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.draw_path(&path, &NativePaint::fill(RgbaLinear::opaque(1.0, 1.0, 1.0)));
+        });
+        surface.read_pixels()?
+    };
+
+    let evenodd = {
+        let mut surface = backend.create_surface(8, 8, SurfaceOptions::default())?;
+        let path = NativePath::from_svg(svg, FillRule::EvenOdd)?;
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.draw_path(&path, &NativePaint::fill(RgbaLinear::opaque(1.0, 1.0, 1.0)));
+        });
+        surface.read_pixels()?
+    };
+
+    let stride = nonzero.stride();
+    let alpha_at = |buf: &[u8], x: usize, y: usize| buf[y * stride + x * 4 + 3];
+
+    // Inner pixel (4, 4): NonZero fills (winding=2), EvenOdd leaves empty.
+    let nz_inner = alpha_at(nonzero.pixels(), 4, 4);
+    let eo_inner = alpha_at(evenodd.pixels(), 4, 4);
+    assert!(nz_inner > 240, "NonZero fills inner: alpha={nz_inner}");
+    assert_eq!(eo_inner, 0, "EvenOdd leaves inner empty: alpha={eo_inner}");
+
+    // Outer ring pixel (1, 1) is filled by both rules.
+    assert!(alpha_at(nonzero.pixels(), 1, 1) > 240);
+    assert!(alpha_at(evenodd.pixels(), 1, 1) > 240);
+    Ok(())
+}
+
+/// `clip_path` masks subsequent draws to the path interior.
+#[test]
+fn clip_path_clips_drawing() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(8, 8, SurfaceOptions::default())?;
+    let clip = NativePath::from_svg("M2 2 L6 2 L6 6 L2 6 Z", FillRule::NonZero)?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.save();
+        canvas.clip_path(&clip);
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 8.0, 8.0),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+        );
+        canvas.restore();
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    let alpha_at = |x: usize, y: usize| px.pixels()[y * stride + x * 4 + 3];
+    assert_eq!(alpha_at(0, 0), 0, "outside path stays transparent");
+    assert_eq!(alpha_at(7, 7), 0, "outside path stays transparent");
+    assert!(alpha_at(4, 4) > 240, "inside path is filled");
+    Ok(())
+}
+
+/// `draw_line` honours stroke width: a horizontal line with width=4 covers
+/// the y rows immediately above/below the line midpoint.
+#[test]
+fn draw_line_respects_stroke_width() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(8, 8, SurfaceOptions::default())?;
+    let mut paint = NativePaint::stroke(RgbaLinear::opaque(1.0, 1.0, 1.0), 4.0);
+    paint.set_anti_alias(false);
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_line(Point::new(0.0, 4.0), Point::new(8.0, 4.0), &paint);
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    let alpha_at = |x: usize, y: usize| px.pixels()[y * stride + x * 4 + 3];
+    // Line is centered at y=4 with width 4, so y in {2,3,4,5} are covered.
+    assert_eq!(alpha_at(4, 0), 0, "row 0 outside stroke band");
+    assert!(alpha_at(4, 3) > 240, "row 3 inside stroke band");
+    assert!(alpha_at(4, 4) > 240, "row 4 (line center) covered");
+    assert_eq!(alpha_at(4, 7), 0, "row 7 outside stroke band");
+    Ok(())
+}
+
+/// `draw_line` with a round cap extends past the line endpoints, while a
+/// butt cap stops cleanly. Sample alpha just before x=0 with the same line
+/// segment under both caps.
+#[test]
+fn draw_line_round_cap_extends_past_endpoints() -> Result<()> {
+    let backend = NativeBackend::new();
+    let alpha_at = |cap: StrokeCap| -> Result<u8> {
+        let mut surface = backend.create_surface(16, 8, SurfaceOptions::default())?;
+        let mut paint = NativePaint::stroke(RgbaLinear::opaque(1.0, 1.0, 1.0), 4.0);
+        paint.set_stroke_cap(cap);
+        paint.set_anti_alias(false);
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            // Line from (4,4) to (12,4): butt cap stops at x=4, round cap
+            // extends ~2px further (radius == half stroke width).
+            canvas.draw_line(Point::new(4.0, 4.0), Point::new(12.0, 4.0), &paint);
+        });
+        let px = surface.read_pixels()?;
+        let stride = px.stride();
+        Ok(px.pixels()[4 * stride + 2 * 4 + 3])
+    };
+    let butt = alpha_at(StrokeCap::Butt)?;
+    let round = alpha_at(StrokeCap::Round)?;
+    assert_eq!(butt, 0, "butt cap stops at x=4");
+    assert!(
+        round > 200,
+        "round cap extends past endpoint: alpha={round}"
+    );
+    Ok(())
+}
+
+/// `draw_line` with a dash leaves periodic gaps along the path.
+#[test]
+fn draw_line_dash_creates_periodic_gaps() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(40, 4, SurfaceOptions::default())?;
+    let mut paint = NativePaint::stroke(RgbaLinear::opaque(1.0, 1.0, 1.0), 2.0);
+    paint.set_dash(vec![4.0, 4.0], 0.0);
+    paint.set_anti_alias(false);
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_line(Point::new(0.0, 2.0), Point::new(40.0, 2.0), &paint);
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    // Sample row y=1 (just above the y=2 line center; the 2-px stroke
+    // covers y=1 and y=2 with butt caps and no anti-alias).
+    let row_start = stride;
+    let row = &px.pixels()[row_start..row_start + stride];
+    let alphas: Vec<u8> = row.chunks_exact(4).map(|p| p[3]).collect();
+    let visible = alphas.iter().filter(|a| **a > 0).count();
+    let invisible = alphas.iter().filter(|a| **a == 0).count();
+    assert!(visible > 0, "dashed line should still produce some pixels");
+    assert!(invisible > 0, "dashed line should leave some gaps");
+    Ok(())
+}
+
+/// `draw_image_src` crops the source rect when scaling. A 4x4 source with
+/// red top-left and blue bottom-right: drawing src=(0,0,2,2) (red region)
+/// stretched to fill an 8x8 destination must be uniformly red.
+#[test]
+fn draw_image_src_crops_source_rect() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut source = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    source.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::opaque(0.0, 0.0, 1.0));
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+        );
+    });
+    let image = source.snapshot();
+
+    let mut dest = backend.create_surface(8, 8, SurfaceOptions::default())?;
+    dest.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_image_src(
+            &image,
+            Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+            Rect::from_xywh(0.0, 0.0, 8.0, 8.0),
+            None,
+            SamplingMode::Nearest,
+        );
+    });
+    let px = dest.read_pixels()?;
+    let stride = px.stride();
+    let pixel_at = |x: usize, y: usize| -> [u8; 4] {
+        let off = y * stride + x * 4;
+        [
+            px.pixels()[off],
+            px.pixels()[off + 1],
+            px.pixels()[off + 2],
+            px.pixels()[off + 3],
+        ]
+    };
+    // Every destination pixel should reflect the red source region. With
+    // unpremul Uint8, red opaque is approximately (255, 0, 0, 255).
+    for y in 0..8 {
+        for x in 0..8 {
+            let p = pixel_at(x, y);
+            assert!(p[0] > 240, "({x},{y}) red expected, got {p:?}");
+            assert!(p[2] < 16, "({x},{y}) blue should be absent, got {p:?}");
+        }
+    }
+    Ok(())
+}
+
+/// `SamplingMode::Nearest` preserves the hard edge between adjacent
+/// source pixels of different colors when upscaling. A 2x2 red/blue
+/// checker scaled to 8x8 must show a sharp red->blue transition at x=4.
+#[test]
+fn sampling_nearest_preserves_hard_edges() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut source = backend.create_surface(2, 2, SurfaceOptions::default())?;
+    source.with_canvas(|canvas| {
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 1.0, 1.0),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+        );
+        canvas.draw_rect(
+            Rect::from_xywh(1.0, 0.0, 1.0, 1.0),
+            &NativePaint::fill(RgbaLinear::opaque(0.0, 0.0, 1.0)),
+        );
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 1.0, 1.0, 1.0),
+            &NativePaint::fill(RgbaLinear::opaque(0.0, 0.0, 1.0)),
+        );
+        canvas.draw_rect(
+            Rect::from_xywh(1.0, 1.0, 1.0, 1.0),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+        );
+    });
+    let image = source.snapshot();
+
+    let mut dest = backend.create_surface(8, 8, SurfaceOptions::default())?;
+    dest.with_canvas(|canvas| {
+        canvas.draw_image_src(
+            &image,
+            Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+            Rect::from_xywh(0.0, 0.0, 8.0, 8.0),
+            None,
+            SamplingMode::Nearest,
+        );
+    });
+    let px = dest.read_pixels()?;
+    let stride = px.stride();
+    // Just before transition (x=3) and just after (x=4) on row 0.
+    let left = (px.pixels()[3 * 4], px.pixels()[3 * 4 + 2]);
+    let right = (px.pixels()[4 * 4], px.pixels()[4 * 4 + 2]);
+    let _ = stride; // unused: row 0 starts at byte 0.
+    assert!(left.0 > 240, "left of edge: red dominant, got r={}", left.0);
+    assert!(left.1 < 16, "left of edge: blue absent, got b={}", left.1);
+    assert!(right.0 < 16, "right of edge: red absent, got r={}", right.0);
+    assert!(
+        right.1 > 240,
+        "right of edge: blue dominant, got b={}",
+        right.1
+    );
+    Ok(())
+}
+
+/// `SamplingMode::Linear` and `Mipmapped` produce non-empty output without
+/// panicking. Exact pixels are backend-sensitive, so we only smoke-test
+/// that the draw succeeds and writes some non-zero pixels.
+#[test]
+fn sampling_linear_and_mipmapped_smoke() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut source = backend.create_surface(2, 2, SurfaceOptions::default())?;
+    source.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::opaque(0.5, 0.5, 0.5));
+    });
+    let image = source.snapshot();
+
+    for mode in [SamplingMode::Linear, SamplingMode::Mipmapped] {
+        let mut dest = backend.create_surface(8, 8, SurfaceOptions::default())?;
+        dest.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.draw_image_src(
+                &image,
+                Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+                Rect::from_xywh(0.0, 0.0, 8.0, 8.0),
+                None,
+                mode,
+            );
+        });
+        let px = dest.read_pixels()?;
+        assert!(
+            px.pixels().iter().any(|c| *c != 0),
+            "{mode:?} should produce non-zero pixels"
+        );
+    }
     Ok(())
 }

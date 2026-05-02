@@ -31,8 +31,13 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - `NativeAffine` (CSS DOMMatrix2DInit form) with `IDENTITY`, `translation`, `scale`, `rotation_radians`, `rotation_degrees` constructors.
   - `NativeCanvas::scale`, `concat_transform`, `save_layer(Option<&NativePaint>)`, `clip_rect`, `clip_rrect`, `draw_surface`.
   - 9 new tests cover: clip_rect masking, clip_rrect rounded corners, transform translation, transform scale, scale-helper-equals-affine, layer opacity isolation, layer blend isolation, draw_surface offset, draw_surface with paint alpha.
-  - `clip_path`, `draw_line`, `NativePath`, `draw_path`, `draw_image`, `draw_image_src`, `SamplingMode` are deferred to Chunk 3C.
-- **Chunks 3C-8 (paths/sampling, filters/shaders, raw image creation, SVG, font/paragraph, Studio adapter, docs): not started.**
+- **Chunk 3C (paths, line, draw_image_src, sampling): complete** on the same branch.
+  - `NativePath::from_svg(svg_data, fill_rule)` parses SVG path data via `skia_safe::utils::parse_path::from_svg` and applies the fill rule.
+  - `FillRule::{NonZero, EvenOdd}`.
+  - `NativeCanvas::clip_path`, `draw_path`, `draw_line`, `draw_image_src`.
+  - `SamplingMode::{Nearest, Linear, Mipmapped}`.
+  - 9 new tests cover: SVG path renders, fill rule difference on a nested same-direction path, clip_path masks, draw_line stroke width, draw_line round-cap extension past endpoints, draw_line dash gaps, draw_image_src cropping, Nearest sharp edges, Linear/Mipmapped smoke.
+- **Chunks 4-8 (filters/shaders, raw image creation, SVG decode, font/paragraph, Studio adapter, docs): not started.**
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:
@@ -290,9 +295,9 @@ Steps:
 - [x] Add `save_layer(paint: Option<&NativePaint>)`.
 - [x] Add `scale(sx, sy)`.
 - [x] Add `concat_transform()` with an affine matrix options type. This covers future transforms without exposing Skia matrices.
-- [ ] Add `clip_rect()`, `clip_rrect()`, and `clip_path()`.
+- [x] Add `clip_rect()`, `clip_rrect()`, and `clip_path()`.
 - [ ] Add `draw_line()`.
-- [ ] Add `NativePath::from_svg(svg_path_data, fill_rule)`.
+- [x] Add `NativePath::from_svg(svg_path_data, fill_rule)`.
 - [ ] Add `draw_path(path, paint)`.
 - [ ] Add `draw_image(image, dst, paint, sampling)`.
 - [ ] Add `draw_image_src(image, src, dst, paint, sampling)`.
@@ -301,7 +306,7 @@ Steps:
 
 Tests:
 
-- [ ] Path fill rules render different pixels for `nonzero` vs `evenodd`.
+- [x] Path fill rules render different pixels for `nonzero` vs `evenodd`.
 - [x] Rounded clipping masks image corners.
 - [x] `save_layer()` applies opacity/filter/blend only to the isolated layer.
 - [ ] `plus-lighter` accumulation does not clamp on F16/F32 surfaces.

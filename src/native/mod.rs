@@ -13,6 +13,7 @@ pub mod error;
 pub mod geometry;
 pub mod image;
 pub mod paint;
+pub mod path;
 pub mod pixels;
 pub mod recorder;
 pub mod surface;
@@ -27,9 +28,10 @@ pub use paint::{
     BlendMode, DashPattern, NativeColorFilter, NativeImageFilter, NativePaint, NativeShader,
     PaintStyle, StrokeCap,
 };
+pub use path::{FillRule, NativePath};
 pub use pixels::{
     AlphaMode, ExportedPixels, PixelColorSpace, PixelDepth, PixelExportOptions, PixelFormat,
-    RawFrame, RawFrameOptions, SurfaceOptions,
+    RawFrame, RawFrameOptions, SamplingMode, SurfaceOptions,
 };
 pub use recorder::{NativeCanvas, NativeRecorder};
 pub use surface::NativeSurface;

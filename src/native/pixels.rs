@@ -1,4 +1,6 @@
-use skia_safe::{AlphaType, ColorSpace as SkColorSpace, ColorType};
+use skia_safe::{
+    AlphaType, ColorSpace as SkColorSpace, ColorType, FilterMode, MipmapMode, SamplingOptions,
+};
 
 use crate::native::color::{LinearColorSpace, OutputColorSpace};
 use crate::native::error::NativeError;
@@ -15,6 +17,28 @@ pub enum PixelFormat {
 pub enum AlphaMode {
     Premultiplied,
     Unpremultiplied,
+}
+
+/// Image sampling strategy for `draw_image_src` and similar resampled
+/// draws. `Nearest` preserves hard pixel edges (used for ID buffers and
+/// preprocessed Citra output); `Linear` uses bilinear filtering;
+/// `Mipmapped` enables trilinear sampling for downscales.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum SamplingMode {
+    Nearest,
+    #[default]
+    Linear,
+    Mipmapped,
+}
+
+impl SamplingMode {
+    pub(crate) fn to_skia(self) -> SamplingOptions {
+        match self {
+            Self::Nearest => SamplingOptions::new(FilterMode::Nearest, MipmapMode::None),
+            Self::Linear => SamplingOptions::new(FilterMode::Linear, MipmapMode::None),
+            Self::Mipmapped => SamplingOptions::new(FilterMode::Linear, MipmapMode::Linear),
+        }
+    }
 }
 
 /// Strict export color space for surface read/write. Each variant is its

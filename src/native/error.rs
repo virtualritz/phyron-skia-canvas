@@ -17,6 +17,7 @@ pub enum NativeError {
     InvalidByteLength { expected: usize, actual: usize },
     SurfaceCreate { reason: String },
     DecodeImage { reason: String },
+    InvalidSvgPath { reason: String },
     Render { reason: String },
     PixelReadback { reason: String },
     PixelWrite { reason: String },
@@ -52,6 +53,7 @@ impl fmt::Display for NativeError {
             }
             Self::SurfaceCreate { reason } => write!(f, "surface create failed: {reason}"),
             Self::DecodeImage { reason } => write!(f, "decode image failed: {reason}"),
+            Self::InvalidSvgPath { reason } => write!(f, "invalid SVG path: {reason}"),
             Self::Render { reason } => write!(f, "render failed: {reason}"),
             Self::PixelReadback { reason } => write!(f, "pixel readback failed: {reason}"),
             Self::PixelWrite { reason } => write!(f, "pixel write failed: {reason}"),
