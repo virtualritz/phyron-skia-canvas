@@ -12,9 +12,9 @@
 use anyhow::Result;
 use phyron_skia_canvas::native::{
     BlendMode, FillRule, GradientInterpolation, GradientStop, LinearColorSpace, NativeAffine,
-    NativeBackend, NativeColorFilter, NativeError, NativeImageFilter, NativePaint, NativePath,
-    NativeShader, PaintStyle, PixelColorSpace, PixelDepth, PixelExportOptions, Point, Rect,
-    RgbaLinear, SamplingMode, StrokeCap, SurfaceOptions,
+    NativeBackend, NativeColorFilter, NativeError, NativeImage, NativeImageFilter, NativePaint,
+    NativePath, NativeShader, PaintStyle, PixelColorSpace, PixelDepth, PixelExportOptions,
+    PixelFormat, Point, Rect, RgbaLinear, SamplingMode, StrokeCap, SurfaceOptions,
 };
 
 const ALPHA_HALF_U8: u8 = 128;
@@ -1430,5 +1430,283 @@ fn paint_set_shader_none_falls_back_to_color() -> Result<()> {
     let g0 = px.pixels()[1];
     assert!(r0 > 200, "color path renders red, got r={r0}");
     assert!(g0 < 32, "no green when shader cleared, got g={g0}");
+    Ok(())
+}
+
+// --- Chunk 5: NativeImage::from_pixels -------------------------------------
+
+/// Construct a 4x4 raw RGBA8 unpremul image and draw it to a surface.
+/// All destination pixels should reflect the source's red region.
+#[test]
+fn from_pixels_rgba8_unpremul_draws() -> Result<()> {
+    // 4x4 solid red, opaque, unpremul Uint8.
+    let mut bytes = vec![0u8; 4 * 4 * 4];
+    for px in bytes.chunks_exact_mut(4) {
+        px[0] = 255;
+        px[3] = 255;
+    }
+    let image = NativeImage::from_pixels(
+        &bytes,
+        4,
+        4,
+        4 * 4,
+        PixelFormat::Rgba8UnormUnpremul,
+        PixelColorSpace::Srgb,
+    )?;
+    assert_eq!(image.width(), 4);
+    assert_eq!(image.height(), 4);
+    assert!(
+        !image.is_premultiplied(),
+        "Unpremul format reports unpremultiplied"
+    );
+
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_image_src(
+            &image,
+            Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
+            Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
+            None,
+            SamplingMode::Nearest,
+        );
+    });
+    let px = surface.read_pixels()?;
+    let r = px.pixels()[0];
+    let a = px.pixels()[3];
+    assert!(r > 240, "destination red, got r={r}");
+    assert!(a > 240, "destination opaque, got a={a}");
+    Ok(())
+}
+
+/// `from_pixels` rejects zero dimensions with `InvalidDimensions`.
+#[test]
+fn from_pixels_zero_dimensions_returns_error() {
+    let result = NativeImage::from_pixels(
+        &[],
+        0,
+        4,
+        0,
+        PixelFormat::Rgba8UnormUnpremul,
+        PixelColorSpace::Srgb,
+    );
+    assert!(matches!(result, Err(NativeError::InvalidDimensions { .. })));
+}
+
+/// `from_pixels` rejects strides smaller than `width * bytes_per_pixel`.
+#[test]
+fn from_pixels_invalid_stride_returns_error() {
+    // 4 width Uint8 RGBA needs >= 16 bytes per row.
+    let bytes = vec![0u8; 8 * 4];
+    let result = NativeImage::from_pixels(
+        &bytes,
+        4,
+        4,
+        8, // too small: would need >= 16
+        PixelFormat::Rgba8UnormUnpremul,
+        PixelColorSpace::Srgb,
+    );
+    assert!(matches!(
+        result,
+        Err(NativeError::InvalidStride {
+            expected: 16,
+            actual: 8
+        })
+    ));
+}
+
+/// `from_pixels` rejects buffers whose length does not equal `stride * height`.
+#[test]
+fn from_pixels_invalid_byte_length_returns_error() {
+    let bytes = vec![0u8; 32]; // expected 4 * 4 * 4 = 64
+    let result = NativeImage::from_pixels(
+        &bytes,
+        4,
+        4,
+        16,
+        PixelFormat::Rgba8UnormUnpremul,
+        PixelColorSpace::Srgb,
+    );
+    assert!(matches!(
+        result,
+        Err(NativeError::InvalidByteLength {
+            expected: 64,
+            actual: 32
+        })
+    ));
+}
+
+/// F32 linear premul preserves HDR values above 1.0 through draw + readback
+/// without clamping at the image boundary. Encode a 2x2 image where r = 2.0
+/// and read it back through a linear F32 surface.
+#[test]
+fn from_pixels_f32_preserves_hdr_values() -> Result<()> {
+    // Each pixel is 16 bytes (4 f32 channels). 2x2 image.
+    let mut bytes = vec![0u8; 2 * 2 * 16];
+    for px in bytes.chunks_exact_mut(16) {
+        // r = 2.0, g = 0, b = 0, a = 1.0 (premultiplied means a stays 1.0
+        // and r already encodes the post-premul value).
+        px[0..4].copy_from_slice(&2.0f32.to_le_bytes());
+        px[4..8].copy_from_slice(&0.0f32.to_le_bytes());
+        px[8..12].copy_from_slice(&0.0f32.to_le_bytes());
+        px[12..16].copy_from_slice(&1.0f32.to_le_bytes());
+    }
+    let image = NativeImage::from_pixels(
+        &bytes,
+        2,
+        2,
+        2 * 16,
+        PixelFormat::Rgba32fPremul,
+        PixelColorSpace::SrgbLinear,
+    )?;
+    assert_eq!(image.width(), 2);
+    assert!(image.is_premultiplied(), "F32Premul reports premultiplied");
+
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(2, 2, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_image_src(
+            &image,
+            Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+            Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+            None,
+            SamplingMode::Nearest,
+        );
+    });
+
+    let exported = surface.read_pixels_linear()?;
+    let r = f32::from_le_bytes([
+        exported.pixels()[0],
+        exported.pixels()[1],
+        exported.pixels()[2],
+        exported.pixels()[3],
+    ]);
+    assert!(
+        r > 1.5,
+        "HDR red preserved through F32 image+surface, got r={r}"
+    );
+    Ok(())
+}
+
+/// F16 premul also preserves HDR values. Use half-precision encoding to
+/// store r = 2.0 and verify it survives the round trip.
+#[test]
+fn from_pixels_f16_preserves_hdr_values() -> Result<()> {
+    fn f32_to_f16_bits(v: f32) -> u16 {
+        // IEEE 754 binary16 round-to-nearest-even encoder, sufficient for
+        // exact representation of 2.0.
+        let bits = v.to_bits();
+        let sign = (bits >> 16) as u16 & 0x8000;
+        let mantissa = bits & 0x007f_ffff;
+        let exp = ((bits >> 23) & 0xff) as i32 - 127 + 15;
+        if exp <= 0 {
+            sign
+        } else if exp >= 31 {
+            sign | 0x7c00
+        } else {
+            sign | ((exp as u16) << 10) | ((mantissa >> 13) as u16)
+        }
+    }
+
+    let r_bits = f32_to_f16_bits(2.0);
+    let zero_bits = f32_to_f16_bits(0.0);
+    let one_bits = f32_to_f16_bits(1.0);
+
+    let mut bytes = vec![0u8; 2 * 2 * 8];
+    for px in bytes.chunks_exact_mut(8) {
+        px[0..2].copy_from_slice(&r_bits.to_le_bytes());
+        px[2..4].copy_from_slice(&zero_bits.to_le_bytes());
+        px[4..6].copy_from_slice(&zero_bits.to_le_bytes());
+        px[6..8].copy_from_slice(&one_bits.to_le_bytes());
+    }
+
+    let image = NativeImage::from_pixels(
+        &bytes,
+        2,
+        2,
+        2 * 8,
+        PixelFormat::Rgba16fPremul,
+        PixelColorSpace::SrgbLinear,
+    )?;
+
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(2, 2, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_image_src(
+            &image,
+            Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+            Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+            None,
+            SamplingMode::Nearest,
+        );
+    });
+
+    let exported = surface.read_pixels_linear()?;
+    let r = f32::from_le_bytes([
+        exported.pixels()[0],
+        exported.pixels()[1],
+        exported.pixels()[2],
+        exported.pixels()[3],
+    ]);
+    assert!(
+        r > 1.5,
+        "HDR red preserved through F16 image+surface, got r={r}"
+    );
+    Ok(())
+}
+
+/// Premultiplied alpha mode is reflected by `is_premultiplied()` and round
+/// trips through draw/readback without unintended unpremultiplication.
+/// Construct an Rgba8UnormPremul image with r = 0.5, a = 0.5 (premul values
+/// 128 / 128) and verify that a premultiplied readback returns ~ (128,
+/// 128) for r and a.
+#[test]
+fn from_pixels_premultiplied_round_trips() -> Result<()> {
+    let mut bytes = vec![0u8; 4 * 4 * 4];
+    for px in bytes.chunks_exact_mut(4) {
+        // Already premul: r=0.5, alpha=0.5 => stored r=128, a=128.
+        px[0] = 128;
+        px[3] = 128;
+    }
+    let image = NativeImage::from_pixels(
+        &bytes,
+        4,
+        4,
+        16,
+        PixelFormat::Rgba8UnormPremul,
+        PixelColorSpace::SrgbLinear,
+    )?;
+    assert!(image.is_premultiplied());
+
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_image_src(
+            &image,
+            Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
+            Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
+            None,
+            SamplingMode::Nearest,
+        );
+    });
+    let exported = surface.read_pixels_as(PixelExportOptions {
+        color_space: PixelColorSpace::SrgbLinear,
+        depth: PixelDepth::Uint8,
+        premultiplied: true,
+    })?;
+    let r = exported.pixels()[0];
+    let a = exported.pixels()[3];
+    assert!(
+        r.abs_diff(128) <= 4,
+        "premul red round-trips ~ 128, got {r}"
+    );
+    assert!(
+        a.abs_diff(128) <= 4,
+        "premul alpha round-trips ~ 128, got {a}"
+    );
     Ok(())
 }

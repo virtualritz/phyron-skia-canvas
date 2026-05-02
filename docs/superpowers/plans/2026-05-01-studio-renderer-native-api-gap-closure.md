@@ -49,7 +49,13 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - `GradientInterpolation::{Srgb, Oklch}` maps to Skia's `interpolation::ColorSpace::SRGBLinear` and `OKLCH`. Both go through Skia's gradient pipeline directly -- no silent fallback.
   - `NativePaint::set_shader(Option<NativeShader>)` setter; `to_skia_paint` plumbs the shader through.
   - 5 new tests cover: unsorted stops error, two-stop count error, sRGB endpoints render correctly, three-stop ordered render, OKLCH midpoint differs from sRGB, `set_shader(None)` falls back to paint color.
-- **Chunks 5-8 (raw image creation, SVG decode, font/paragraph, Studio adapter, docs): not started.**
+- **Chunk 5 (Task 8 -- raw image creation): complete** on the same branch.
+  - `NativeImage::from_pixels(bytes, width, height, stride, pixel_format, color_space)` returns `Result<NativeImage, NativeError>`. Strict validation: zero dimensions return `InvalidDimensions`, stride < width * bpp returns `InvalidStride`, byte length mismatch returns `InvalidByteLength`. Pixels are copied into a Skia raster image.
+  - Color space input is `PixelColorSpace` (not the surface-only `LinearColorSpace`), so callers explicitly state whether their pixels are gamma-coded sRGB / Display P3 / Rec.2020 or the linear-light counterparts. No implicit sRGB fallback.
+  - Pixel formats: `Rgba8UnormPremul`, `Rgba8UnormUnpremul`, `Rgba16fPremul`, `Rgba32fPremul`. The intended bridge for rsmpeg-decoded video frames and Citra-generated images.
+  - `NativeImage::is_premultiplied()` exposes the alpha mode of the underlying image.
+  - 7 new tests cover: RGBA8 unpremul draws end-to-end, zero dimensions error, invalid stride error, invalid byte length error, F32 HDR (r=2.0) preservation through draw + linear readback, F16 HDR preservation, Rgba8UnormPremul round-trip preserves premultiplied values.
+- **Chunks 6-8 (SVG decode, font/paragraph, Studio adapter, docs): not started.**
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:
@@ -372,18 +378,18 @@ Tests:
 
 Steps:
 
-- [ ] Add `NativeImage::from_pixels(bytes, width, height, stride, pixel_format, color_space)`.
+- [x] Add `NativeImage::from_pixels(bytes, width, height, stride, pixel_format, color_space)`.
 - [ ] Add a borrowed-slice constructor if it is safe; otherwise document the copy and keep owned data.
-- [ ] Validate stride, dimensions, byte length, alpha mode, and color space.
-- [ ] Support RGBA8 premul/unpremul, RGBA16F premul, and RGBA32F premul.
-- [ ] Use this as the intended bridge for rsmpeg decoded video frames and Citra-generated images.
+- [x] Validate stride, dimensions, byte length, alpha mode, and color space.
+- [x] Support RGBA8 premul/unpremul, RGBA16F premul, and RGBA32F premul.
+- [x] Use this as the intended bridge for rsmpeg decoded video frames and Citra-generated images.
 
 Tests:
 
-- [ ] RGBA8 raw image draws without PNG/JPEG re-encode.
-- [ ] F16/F32 raw image preserves HDR values until SDR export.
-- [ ] Invalid stride returns a typed error.
-- [ ] Alpha mode is explicit and tested.
+- [x] RGBA8 raw image draws without PNG/JPEG re-encode.
+- [x] F16/F32 raw image preserves HDR values until SDR export.
+- [x] Invalid stride returns a typed error.
+- [x] Alpha mode is explicit and tested.
 
 ### Task 9: Pin SVG behavior.
 
