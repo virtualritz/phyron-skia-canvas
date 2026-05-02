@@ -60,7 +60,15 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - Pinned that `NativeImage::from_encoded` does NOT decode SVG XML (it is a raster-codec API); the wrapper surfaces this as a typed `DecodeImage` error.
   - Added explicit `NativeImage::from_svg_xml(svg, width, height)` using `skia_safe::svg::Dom` + a raster surface snapshot. Container size is set from `(width, height)`. Zero dimensions return `InvalidDimensions`; malformed XML returns `DecodeImage`.
   - 5 new tests cover: relative-and-curve SVG path renders, `from_encoded` SVG returns a decode error, `from_svg_xml` rasterizes a minimal `<rect>` SVG, zero-dimension input rejected, malformed XML rejected.
-- **Chunks 7-8 (font/paragraph, Studio adapter, docs): not started.**
+- **Chunk 7A (Task 10 -- font manager): complete** on the same branch. Per reviewer feedback Chunk 7 was sub-split into 7A (fonts), 7B (simple paragraph layout), 7C (rich spans + metrics).
+  - `NativeFontManager::new` builds an empty registry.
+  - `register_font_from_data(family, bytes)` parses TTF/OTF/WOFF/WOFF2 byte streams via `FontMgr::new_from_data` and registers the typeface under the family alias.
+  - `register_font_from_path(family, path)` reads the file then delegates.
+  - `has_font(family)` and `families()` query the registered aliases.
+  - Internal state lives behind `parking_lot::Mutex` (added as a direct dependency); no `RefCell` leaks. The manager is single-threaded by Skia's binding constraints (`TypefaceFontProvider` is not `Send`); cross-thread sharing is not promised.
+  - New `NativeError::FontRegister { reason }` reports parse failures and IO errors.
+  - 8 new contract tests: starts empty, register-from-data lists family, register-from-path lists family, duplicate registration does not duplicate alias, multiple families tracked in registration order, garbage bytes return `FontRegister`, missing path returns `FontRegister`, interior mutability through `&NativeFontManager` (no `RefCell`).
+- **Chunks 7B-8 (simple paragraph layout, rich spans + metrics, Studio adapter, docs): not started.**
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:
@@ -422,12 +430,12 @@ Steps:
 
 Steps:
 
-- [ ] Add `NativeFontManager` or `NativeFontLibrary`.
-- [ ] Support `register_font_from_path(family, paths)`.
-- [ ] Support `register_font_from_data(family, bytes)`.
-- [ ] Support `has_font(family)` and `families()`.
-- [ ] Use owned state where possible. If shared global state is required, wrap it with `parking_lot::Mutex`, not `RefCell`.
-- [ ] Preserve existing JS `FontLibrary` behavior.
+- [x] Add `NativeFontManager` or `NativeFontLibrary`.
+- [x] Support `register_font_from_path(family, paths)`.
+- [x] Support `register_font_from_data(family, bytes)`.
+- [x] Support `has_font(family)` and `families()`.
+- [x] Use owned state where possible. If shared global state is required, wrap it with `parking_lot::Mutex`, not `RefCell`.
+- [x] Preserve existing JS `FontLibrary` behavior.
 
 ### Task 11: Add paragraph layout facade.
 

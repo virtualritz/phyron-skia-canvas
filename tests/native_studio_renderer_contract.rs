@@ -12,9 +12,10 @@
 use anyhow::Result;
 use phyron_skia_canvas::native::{
     BlendMode, FillRule, GradientInterpolation, GradientStop, LinearColorSpace, NativeAffine,
-    NativeBackend, NativeColorFilter, NativeError, NativeImage, NativeImageFilter, NativePaint,
-    NativePath, NativeShader, PaintStyle, PixelColorSpace, PixelDepth, PixelExportOptions,
-    PixelFormat, Point, Rect, RgbaLinear, SamplingMode, StrokeCap, SurfaceOptions,
+    NativeBackend, NativeColorFilter, NativeError, NativeFontManager, NativeImage,
+    NativeImageFilter, NativePaint, NativePath, NativeShader, PaintStyle, PixelColorSpace,
+    PixelDepth, PixelExportOptions, PixelFormat, Point, Rect, RgbaLinear, SamplingMode, StrokeCap,
+    SurfaceOptions,
 };
 
 const ALPHA_HALF_U8: u8 = 128;
@@ -1804,4 +1805,108 @@ fn from_svg_xml_malformed_xml_returns_decode_error() {
         matches!(result, Err(NativeError::DecodeImage { .. })),
         "expected DecodeImage, got {result:?}"
     );
+}
+
+// --- Chunk 7A: NativeFontManager -------------------------------------------
+
+const FONT_FIXTURE: &str = "tests/assets/Oswald/static/Oswald-Bold.ttf";
+
+/// A fresh `NativeFontManager` reports no registered families.
+#[test]
+fn font_manager_starts_empty() {
+    let mgr = NativeFontManager::new();
+    assert!(mgr.families().is_empty());
+    assert!(!mgr.has_font("Oswald"));
+}
+
+/// Registering a font from in-memory bytes makes the family visible via
+/// `has_font` and `families`.
+#[test]
+fn font_manager_register_from_data_lists_family() -> Result<()> {
+    let bytes = std::fs::read(FONT_FIXTURE)?;
+    let mgr = NativeFontManager::new();
+    mgr.register_font_from_data("Oswald Test", &bytes)?;
+    assert!(mgr.has_font("Oswald Test"));
+    assert_eq!(mgr.families(), vec!["Oswald Test".to_string()]);
+    Ok(())
+}
+
+/// Registering from a file path is equivalent to registering from data.
+#[test]
+fn font_manager_register_from_path_lists_family() -> Result<()> {
+    let mgr = NativeFontManager::new();
+    mgr.register_font_from_path("Oswald Path", FONT_FIXTURE)?;
+    assert!(mgr.has_font("Oswald Path"));
+    Ok(())
+}
+
+/// Calling register twice for the same family does not duplicate the
+/// alias in the families list.
+#[test]
+fn font_manager_register_same_family_does_not_duplicate() -> Result<()> {
+    let bytes = std::fs::read(FONT_FIXTURE)?;
+    let mgr = NativeFontManager::new();
+    mgr.register_font_from_data("Oswald Dup", &bytes)?;
+    mgr.register_font_from_data("Oswald Dup", &bytes)?;
+    let families = mgr.families();
+    assert_eq!(families, vec!["Oswald Dup".to_string()]);
+    Ok(())
+}
+
+/// Multiple distinct families are tracked in registration order.
+#[test]
+fn font_manager_tracks_multiple_families_in_order() -> Result<()> {
+    let bytes = std::fs::read(FONT_FIXTURE)?;
+    let mgr = NativeFontManager::new();
+    mgr.register_font_from_data("Family A", &bytes)?;
+    mgr.register_font_from_data("Family B", &bytes)?;
+    mgr.register_font_from_data("Family C", &bytes)?;
+    assert_eq!(
+        mgr.families(),
+        vec![
+            "Family A".to_string(),
+            "Family B".to_string(),
+            "Family C".to_string(),
+        ]
+    );
+    assert!(mgr.has_font("Family A"));
+    assert!(mgr.has_font("Family B"));
+    assert!(mgr.has_font("Family C"));
+    assert!(!mgr.has_font("Family D"));
+    Ok(())
+}
+
+/// Garbage bytes return `FontRegister`, not a panic or silent success.
+#[test]
+fn font_manager_invalid_data_returns_font_register_error() {
+    let mgr = NativeFontManager::new();
+    let result = mgr.register_font_from_data("Garbage", b"not a real font");
+    assert!(matches!(result, Err(NativeError::FontRegister { .. })));
+    assert!(mgr.families().is_empty());
+}
+
+/// A non-existent path returns `FontRegister` with the IO error reason.
+#[test]
+fn font_manager_missing_path_returns_font_register_error() {
+    let mgr = NativeFontManager::new();
+    let result = mgr.register_font_from_path("Missing", "tests/assets/does_not_exist.ttf");
+    assert!(matches!(result, Err(NativeError::FontRegister { .. })));
+}
+
+/// `NativeFontManager` uses `parking_lot::Mutex` for interior
+/// mutability rather than `RefCell`, so registration and queries can
+/// share the same `&NativeFontManager` reference. (Cross-thread
+/// sharing is not promised: skia-safe's `TypefaceFontProvider` is
+/// not `Send`, so `NativeFontManager` is single-threaded.) The audit
+/// at the top of this file (`pub .*RefCell` against `src/native`)
+/// statically enforces no `RefCell` leaks through the public API.
+#[test]
+fn font_manager_uses_interior_mutability_through_immutable_ref() -> Result<()> {
+    let mgr = NativeFontManager::new();
+    let bytes = std::fs::read(FONT_FIXTURE)?;
+    let mgr_ref = &mgr;
+    mgr_ref.register_font_from_data("Interior", &bytes)?;
+    assert!(mgr_ref.has_font("Interior"));
+    assert_eq!(mgr_ref.families(), vec!["Interior".to_string()]);
+    Ok(())
 }
