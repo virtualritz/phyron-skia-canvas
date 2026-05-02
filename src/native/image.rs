@@ -1,4 +1,7 @@
-use skia_safe::{AlphaType, Data, Image as SkImage, ImageInfo, images};
+use skia_safe::{
+    AlphaType, Color4f, ColorSpace, ColorType, Data, FontMgr, Image as SkImage, ImageInfo, Size,
+    images, surfaces,
+};
 
 use crate::native::error::NativeError;
 use crate::native::pixels::{PixelColorSpace, PixelFormat};
@@ -89,6 +92,52 @@ impl NativeImage {
             }
         })?;
         Ok(Self { inner: image })
+    }
+
+    /// Rasterize an SVG XML document into a `NativeImage` of the given
+    /// dimensions. `from_encoded` does not decode SVG XML (it handles
+    /// raster codecs only); this method is the explicit SVG bridge.
+    ///
+    /// SVG content is rendered into a transparent linear-light sRGB
+    /// surface at the requested width and height, then snapshotted. The
+    /// result is suitable for passing to `draw_image_rect` /
+    /// `draw_image_src`.
+    ///
+    /// `width` and `height` set the SVG container size: the SVG's own
+    /// `viewBox` and intrinsic dimensions are mapped into this box.
+    pub fn from_svg_xml(svg: &str, width: u32, height: u32) -> Result<Self, NativeError> {
+        if width == 0 || height == 0 {
+            return Err(NativeError::InvalidDimensions {
+                width: width as f32,
+                height: height as f32,
+            });
+        }
+        let font_mgr = FontMgr::new();
+        let mut dom = skia_safe::svg::Dom::from_bytes(svg.as_bytes(), font_mgr).map_err(|_| {
+            NativeError::DecodeImage {
+                reason: "could not parse SVG XML".to_string(),
+            }
+        })?;
+        dom.set_container_size(Size::new(width as f32, height as f32));
+
+        let info = ImageInfo::new(
+            (width as i32, height as i32),
+            ColorType::RGBAF16,
+            AlphaType::Premul,
+            ColorSpace::new_srgb_linear(),
+        );
+        let mut surface =
+            surfaces::raster(&info, None, None).ok_or_else(|| NativeError::DecodeImage {
+                reason: format!("could not allocate {width}x{height} SVG render surface"),
+            })?;
+        {
+            let canvas = surface.canvas();
+            canvas.clear(Color4f::new(0.0, 0.0, 0.0, 0.0));
+            dom.render(canvas);
+        }
+        Ok(Self {
+            inner: surface.image_snapshot(),
+        })
     }
 
     pub fn width(&self) -> u32 {

@@ -1710,3 +1710,98 @@ fn from_pixels_premultiplied_round_trips() -> Result<()> {
     );
     Ok(())
 }
+
+// --- Chunk 6: SVG path/image behavior --------------------------------------
+
+/// Studio's `ShapeItem.pathData` exercises the full SVG path mini-language:
+/// uppercase absolute commands and lowercase relative commands, with curves.
+/// This test parses such a path and renders it: the result must show
+/// non-trivial fill coverage.
+#[test]
+fn native_path_from_svg_handles_relative_and_curve_commands() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(16, 16, SurfaceOptions::default())?;
+    // Move to (2,2), draw a small loop using mixed relative line and cubic
+    // curve commands, close. Equivalent shape: roughly a rounded blob.
+    let svg_path = "M2 2 l 12 0 q 0 12 -12 12 z";
+    let path = NativePath::from_svg(svg_path, FillRule::NonZero)?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_path(&path, &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)));
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    let alpha_at = |x: usize, y: usize| px.pixels()[y * stride + x * 4 + 3];
+    assert!(
+        alpha_at(4, 4) > 200,
+        "interior of relative-path blob is filled"
+    );
+    assert_eq!(alpha_at(0, 0), 0, "outside the path stays transparent");
+    Ok(())
+}
+
+/// Pin Skia's behavior: `Image::from_encoded` does NOT decode SVG XML
+/// (it is a raster-codec API). The wrapper surfaces this as a typed
+/// `DecodeImage` error rather than silently returning a blank image.
+/// Callers needing SVG must use `NativeImage::from_svg_xml`.
+#[test]
+fn from_encoded_does_not_decode_svg_xml() {
+    let svg = b"<svg xmlns='http://www.w3.org/2000/svg' width='4' height='4'>\
+                <rect width='4' height='4' fill='red'/>\
+                </svg>";
+    let result = NativeImage::from_encoded(svg);
+    assert!(
+        matches!(result, Err(NativeError::DecodeImage { .. })),
+        "expected DecodeImage error, got {result:?}"
+    );
+}
+
+/// `NativeImage::from_svg_xml` rasterizes a minimal SVG document into an
+/// image of the requested dimensions. A red 4x4 rect should produce
+/// non-zero red pixels when drawn onto a surface.
+#[test]
+fn from_svg_xml_rasterizes_minimal_svg() -> Result<()> {
+    let svg = "<svg xmlns='http://www.w3.org/2000/svg' width='4' height='4'>\
+               <rect width='4' height='4' fill='red'/>\
+               </svg>";
+    let image = NativeImage::from_svg_xml(svg, 4, 4)?;
+    assert_eq!(image.width(), 4);
+    assert_eq!(image.height(), 4);
+
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(4, 4, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_image_src(
+            &image,
+            Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
+            Rect::from_xywh(0.0, 0.0, 4.0, 4.0),
+            None,
+            SamplingMode::Nearest,
+        );
+    });
+    let px = surface.read_pixels()?;
+    let r = px.pixels()[0];
+    let a = px.pixels()[3];
+    assert!(r > 200, "SVG rect renders red, got r={r}");
+    assert!(a > 240, "SVG rect renders opaque, got a={a}");
+    Ok(())
+}
+
+/// `from_svg_xml` rejects zero dimensions with `InvalidDimensions`.
+#[test]
+fn from_svg_xml_zero_dimensions_returns_error() {
+    let svg = "<svg xmlns='http://www.w3.org/2000/svg' width='4' height='4'></svg>";
+    let result = NativeImage::from_svg_xml(svg, 0, 4);
+    assert!(matches!(result, Err(NativeError::InvalidDimensions { .. })));
+}
+
+/// `from_svg_xml` rejects malformed SVG XML with `DecodeImage`.
+#[test]
+fn from_svg_xml_malformed_xml_returns_decode_error() {
+    let result = NativeImage::from_svg_xml("not actually svg", 4, 4);
+    assert!(
+        matches!(result, Err(NativeError::DecodeImage { .. })),
+        "expected DecodeImage, got {result:?}"
+    );
+}

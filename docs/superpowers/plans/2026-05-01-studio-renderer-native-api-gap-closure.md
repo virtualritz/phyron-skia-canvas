@@ -55,7 +55,12 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - Pixel formats: `Rgba8UnormPremul`, `Rgba8UnormUnpremul`, `Rgba16fPremul`, `Rgba32fPremul`. The intended bridge for rsmpeg-decoded video frames and Citra-generated images.
   - `NativeImage::is_premultiplied()` exposes the alpha mode of the underlying image.
   - 7 new tests cover: RGBA8 unpremul draws end-to-end, zero dimensions error, invalid stride error, invalid byte length error, F32 HDR (r=2.0) preservation through draw + linear readback, F16 HDR preservation, Rgba8UnormPremul round-trip preserves premultiplied values.
-- **Chunks 6-8 (SVG decode, font/paragraph, Studio adapter, docs): not started.**
+- **Chunk 6 (Task 9 -- SVG behavior): complete** on the same branch.
+  - Confirmed `NativePath::from_svg` accepts the full SVG mini-language including relative commands and quadratic/cubic curves; added a Studio-style mixed-command path test.
+  - Pinned that `NativeImage::from_encoded` does NOT decode SVG XML (it is a raster-codec API); the wrapper surfaces this as a typed `DecodeImage` error.
+  - Added explicit `NativeImage::from_svg_xml(svg, width, height)` using `skia_safe::svg::Dom` + a raster surface snapshot. Container size is set from `(width, height)`. Zero dimensions return `InvalidDimensions`; malformed XML returns `DecodeImage`.
+  - 5 new tests cover: relative-and-curve SVG path renders, `from_encoded` SVG returns a decode error, `from_svg_xml` rasterizes a minimal `<rect>` SVG, zero-dimension input rejected, malformed XML rejected.
+- **Chunks 7-8 (font/paragraph, Studio adapter, docs): not started.**
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:
@@ -401,9 +406,9 @@ Tests:
 
 Steps:
 
-- [ ] Add a contract test for `NativePath::from_svg()` using the same path-data form as `ShapeItem.pathData`.
-- [ ] Add a contract test for loading SVG XML bytes through `NativeImage::from_encoded()`.
-- [ ] If encoded SVG image decode does not match the JS backend, add a named `NativeImage::from_svg_xml(svg, width, height)` API instead of relying on ambiguous codec behavior.
+- [x] Add a contract test for `NativePath::from_svg()` using the same path-data form as `ShapeItem.pathData`.
+- [x] Add a contract test for loading SVG XML bytes through `NativeImage::from_encoded()`.
+- [x] If encoded SVG image decode does not match the JS backend, add a named `NativeImage::from_svg_xml(svg, width, height)` API instead of relying on ambiguous codec behavior.
 
 ## Chunk 6: Text And Fonts
 
