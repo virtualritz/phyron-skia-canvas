@@ -5,6 +5,7 @@ use skia_safe::{
 
 use crate::native::color::RgbaLinear;
 use crate::native::filter::{NativeColorFilter, NativeImageFilter};
+use crate::native::shader::NativeShader;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum PaintStyle {
@@ -93,14 +94,6 @@ impl BlendMode {
             Self::PlusLighter => SkBlendMode::Plus,
         }
     }
-}
-
-/// Opaque shader handle. Factory methods land with Chunk 4B (shaders).
-/// Field is private so this type cannot be constructed by external callers
-/// until factories exist.
-#[derive(Debug, Clone)]
-pub struct NativeShader {
-    _private: (),
 }
 
 /// Mutable paint state used by all `NativeCanvas` drawing methods. Mirrors
@@ -203,6 +196,11 @@ impl NativePaint {
         self
     }
 
+    pub fn set_shader(&mut self, shader: Option<NativeShader>) -> &mut Self {
+        self.shader = shader;
+        self
+    }
+
     pub fn set_image_filter(&mut self, filter: Option<NativeImageFilter>) -> &mut Self {
         self.image_filter = filter;
         self
@@ -243,6 +241,9 @@ impl NativePaint {
             && let Some(effect) = dash_path_effect::new(&dash.intervals, dash.phase)
         {
             paint.set_path_effect(effect);
+        }
+        if let Some(shader) = &self.shader {
+            paint.set_shader(shader.inner.clone());
         }
         if let Some(filter) = &self.image_filter {
             paint.set_image_filter(filter.inner.clone());

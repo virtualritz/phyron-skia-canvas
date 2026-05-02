@@ -11,9 +11,10 @@
 
 use anyhow::Result;
 use phyron_skia_canvas::native::{
-    BlendMode, FillRule, LinearColorSpace, NativeAffine, NativeBackend, NativeColorFilter,
-    NativeImageFilter, NativePaint, NativePath, PaintStyle, PixelColorSpace, PixelDepth,
-    PixelExportOptions, Point, Rect, RgbaLinear, SamplingMode, StrokeCap, SurfaceOptions,
+    BlendMode, FillRule, GradientInterpolation, GradientStop, LinearColorSpace, NativeAffine,
+    NativeBackend, NativeColorFilter, NativeError, NativeImageFilter, NativePaint, NativePath,
+    NativeShader, PaintStyle, PixelColorSpace, PixelDepth, PixelExportOptions, Point, Rect,
+    RgbaLinear, SamplingMode, StrokeCap, SurfaceOptions,
 };
 
 const ALPHA_HALF_U8: u8 = 128;
@@ -1221,5 +1222,213 @@ fn color_filter_gamma_round_trip_through_compose() -> Result<()> {
         dr <= 8 && dg <= 8 && db <= 8,
         "gamma round-trip differs by at most 8/255: dr={dr} dg={dg} db={db}"
     );
+    Ok(())
+}
+
+// --- Chunk 4B: shaders -----------------------------------------------------
+
+/// Gradient stops must be sorted by position. An out-of-order stop list
+/// must surface a typed error rather than silently rendering.
+#[test]
+fn gradient_unsorted_stops_returns_invalid_gradient_error() {
+    let result = NativeShader::linear_gradient(
+        Point::new(0.0, 0.0),
+        Point::new(16.0, 0.0),
+        &[
+            GradientStop {
+                position: 0.5,
+                color: RgbaLinear::opaque(1.0, 0.0, 0.0),
+            },
+            GradientStop {
+                position: 0.0,
+                color: RgbaLinear::opaque(0.0, 0.0, 1.0),
+            },
+        ],
+        GradientInterpolation::Srgb,
+    );
+    assert!(
+        matches!(result, Err(NativeError::InvalidGradient { .. })),
+        "expected InvalidGradient, got {result:?}"
+    );
+}
+
+#[test]
+fn gradient_requires_at_least_two_stops() {
+    let result = NativeShader::linear_gradient(
+        Point::new(0.0, 0.0),
+        Point::new(16.0, 0.0),
+        &[GradientStop {
+            position: 0.0,
+            color: RgbaLinear::opaque(1.0, 0.0, 0.0),
+        }],
+        GradientInterpolation::Srgb,
+    );
+    assert!(matches!(result, Err(NativeError::InvalidGradient { .. })));
+}
+
+/// Linear sRGB gradient renders the expected endpoints. A 16x1 horizontal
+/// red->blue gradient must show ~red at x=0 and ~blue at x=15.
+#[test]
+fn linear_gradient_srgb_renders_endpoints() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(16, 1, SurfaceOptions::default())?;
+    let shader = NativeShader::linear_gradient(
+        Point::new(0.0, 0.0),
+        Point::new(16.0, 0.0),
+        &[
+            GradientStop {
+                position: 0.0,
+                color: RgbaLinear::opaque(1.0, 0.0, 0.0),
+            },
+            GradientStop {
+                position: 1.0,
+                color: RgbaLinear::opaque(0.0, 0.0, 1.0),
+            },
+        ],
+        GradientInterpolation::Srgb,
+    )?;
+    let mut paint = NativePaint::default();
+    paint.set_shader(Some(shader));
+    surface.with_canvas(|canvas| {
+        canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 16.0, 1.0), &paint);
+    });
+    let px = surface.read_pixels()?;
+    // Pixel centers are at x=0.5 and x=15.5, so a small linear
+    // contribution from the far stop survives. With sRGB-gamma Uint8
+    // readback, a 0.03 linear blue rounds to ~50 in u8, so thresholds
+    // are loose. The dominant channel must remain clearly dominant.
+    let r0 = px.pixels()[0];
+    let b0 = px.pixels()[2];
+    assert!(r0 > 200, "left endpoint ~ red, got r={r0}");
+    assert!(b0 < 80, "left endpoint mostly red, got b={b0}");
+    let r15 = px.pixels()[15 * 4];
+    let b15 = px.pixels()[15 * 4 + 2];
+    assert!(r15 < 80, "right endpoint mostly blue, got r={r15}");
+    assert!(b15 > 200, "right endpoint ~ blue, got b={b15}");
+    Ok(())
+}
+
+/// Stops at non-extreme positions are honoured. Three-stop red->green->blue
+/// gradient: x=0 red, x=8 green, x=15 blue.
+#[test]
+fn linear_gradient_three_stops_renders_in_order() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(16, 1, SurfaceOptions::default())?;
+    let shader = NativeShader::linear_gradient(
+        Point::new(0.0, 0.0),
+        Point::new(16.0, 0.0),
+        &[
+            GradientStop {
+                position: 0.0,
+                color: RgbaLinear::opaque(1.0, 0.0, 0.0),
+            },
+            GradientStop {
+                position: 0.5,
+                color: RgbaLinear::opaque(0.0, 1.0, 0.0),
+            },
+            GradientStop {
+                position: 1.0,
+                color: RgbaLinear::opaque(0.0, 0.0, 1.0),
+            },
+        ],
+        GradientInterpolation::Srgb,
+    )?;
+    let mut paint = NativePaint::default();
+    paint.set_shader(Some(shader));
+    surface.with_canvas(|canvas| {
+        canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 16.0, 1.0), &paint);
+    });
+    let px = surface.read_pixels()?;
+    let r0 = px.pixels()[0];
+    let g8 = px.pixels()[8 * 4 + 1];
+    let b15 = px.pixels()[15 * 4 + 2];
+    assert!(r0 > 200, "x=0 ~ red, got r={r0}");
+    assert!(g8 > 150, "x=8 ~ green, got g={g8}");
+    assert!(b15 > 200, "x=15 ~ blue, got b={b15}");
+    Ok(())
+}
+
+/// OKLCH interpolation produces a perceptually different intermediate
+/// from sRGB interpolation. Red->blue at the midpoint:
+/// - sRGB linear: leans toward dark purple/grey, very low green.
+/// - OKLCH: passes through more saturated colors with higher visible
+///   intensity in non-red, non-blue channels.
+///
+/// We assert that the midpoint pixel differs by at least one channel
+/// across the two interpolations. Exact values are backend-sensitive.
+#[test]
+fn linear_gradient_oklch_differs_from_srgb_at_midpoint() -> Result<()> {
+    let backend = NativeBackend::new();
+    let render = |interp: GradientInterpolation| -> Result<[u8; 4]> {
+        let mut surface = backend.create_surface(16, 1, SurfaceOptions::default())?;
+        let shader = NativeShader::linear_gradient(
+            Point::new(0.0, 0.0),
+            Point::new(16.0, 0.0),
+            &[
+                GradientStop {
+                    position: 0.0,
+                    color: RgbaLinear::opaque(1.0, 0.0, 0.0),
+                },
+                GradientStop {
+                    position: 1.0,
+                    color: RgbaLinear::opaque(0.0, 0.0, 1.0),
+                },
+            ],
+            interp,
+        )?;
+        let mut paint = NativePaint::default();
+        paint.set_shader(Some(shader));
+        surface.with_canvas(|canvas| {
+            canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 16.0, 1.0), &paint);
+        });
+        let px = surface.read_pixels()?;
+        Ok([
+            px.pixels()[8 * 4],
+            px.pixels()[8 * 4 + 1],
+            px.pixels()[8 * 4 + 2],
+            px.pixels()[8 * 4 + 3],
+        ])
+    };
+    let srgb = render(GradientInterpolation::Srgb)?;
+    let oklch = render(GradientInterpolation::Oklch)?;
+    assert_ne!(
+        srgb, oklch,
+        "OKLCH must produce a different midpoint than sRGB-linear; got equal {srgb:?}"
+    );
+    Ok(())
+}
+
+/// `paint.set_shader(None)` clears the shader so the paint's `color`
+/// drives the draw again.
+#[test]
+fn paint_set_shader_none_falls_back_to_color() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(2, 1, SurfaceOptions::default())?;
+    let mut paint = NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0));
+    let shader = NativeShader::linear_gradient(
+        Point::new(0.0, 0.0),
+        Point::new(2.0, 0.0),
+        &[
+            GradientStop {
+                position: 0.0,
+                color: RgbaLinear::opaque(0.0, 1.0, 0.0),
+            },
+            GradientStop {
+                position: 1.0,
+                color: RgbaLinear::opaque(0.0, 1.0, 0.0),
+            },
+        ],
+        GradientInterpolation::Srgb,
+    )?;
+    paint.set_shader(Some(shader));
+    paint.set_shader(None);
+    surface.with_canvas(|canvas| {
+        canvas.draw_rect(Rect::from_xywh(0.0, 0.0, 2.0, 1.0), &paint);
+    });
+    let px = surface.read_pixels()?;
+    let r0 = px.pixels()[0];
+    let g0 = px.pixels()[1];
+    assert!(r0 > 200, "color path renders red, got r={r0}");
+    assert!(g0 < 32, "no green when shader cleared, got g={g0}");
     Ok(())
 }

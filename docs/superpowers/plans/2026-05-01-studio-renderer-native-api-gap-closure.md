@@ -43,7 +43,13 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - `NativePaint::set_image_filter` / `set_color_filter` setters; `to_skia_paint` applies both.
   - `NativeImageFilter` and `NativeColorFilter` moved out of `paint.rs` into `src/native/filter.rs` with private `inner` skia handles.
   - 7 new tests cover: blur expanding alpha, drop shadow offset pixels, color matrix RGB swap, color filter wrapped as image filter, image filter compose chains inner-then-outer, luma maps luminance to alpha (white visible / black invisible), gamma compose round-trip.
-- **Chunks 4B, 5-8 (shaders, raw image creation, SVG decode, font/paragraph, Studio adapter, docs): not started.**
+- **Chunk 4B (shaders subset of Task 7): complete** on the same branch.
+  - `NativeShader::linear_gradient(start, end, stops, interpolation_space)` returns `Result<NativeShader, NativeError>`. Validates stop count (>= 2), sorted positions, and 0..=1 range; failures return `NativeError::InvalidGradient`.
+  - `GradientStop { position, color }` carries `RgbaLinear` colors in the surface working color space.
+  - `GradientInterpolation::{Srgb, Oklch}` maps to Skia's `interpolation::ColorSpace::SRGBLinear` and `OKLCH`. Both go through Skia's gradient pipeline directly -- no silent fallback.
+  - `NativePaint::set_shader(Option<NativeShader>)` setter; `to_skia_paint` plumbs the shader through.
+  - 5 new tests cover: unsorted stops error, two-stop count error, sRGB endpoints render correctly, three-stop ordered render, OKLCH midpoint differs from sRGB, `set_shader(None)` falls back to paint color.
+- **Chunks 5-8 (raw image creation, SVG decode, font/paragraph, Studio adapter, docs): not started.**
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:

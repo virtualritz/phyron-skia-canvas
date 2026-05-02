@@ -17,6 +17,7 @@ pub mod paint;
 pub mod path;
 pub mod pixels;
 pub mod recorder;
+pub mod shader;
 pub mod surface;
 pub mod text;
 
@@ -26,12 +27,13 @@ pub use error::NativeError;
 pub use filter::{NativeColorFilter, NativeImageFilter};
 pub use geometry::{NativeAffine, Point, Rect, Size};
 pub use image::NativeImage;
-pub use paint::{BlendMode, DashPattern, NativePaint, NativeShader, PaintStyle, StrokeCap};
+pub use paint::{BlendMode, DashPattern, NativePaint, PaintStyle, StrokeCap};
 pub use path::{FillRule, NativePath};
 pub use pixels::{
     AlphaMode, ExportedPixels, PixelColorSpace, PixelDepth, PixelExportOptions, PixelFormat,
     RawFrame, RawFrameOptions, SamplingMode, SurfaceOptions,
 };
 pub use recorder::{NativeCanvas, NativeRecorder};
+pub use shader::{GradientInterpolation, GradientStop, NativeShader};
 pub use surface::NativeSurface;
 pub use text::{TextAlign, TextBoxOptions, VerticalAlign};
