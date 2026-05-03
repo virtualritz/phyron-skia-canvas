@@ -458,19 +458,19 @@ Steps:
 - [ ] Add `ParagraphStyle`.
 - [ ] Add `RichTextSpan`.
 - [x] Add `NativeTextEngine::layout_text(text, style, max_width)`.
-- [x] Add `NativeTextEngine::layout_rich_text(spans, base_style, max_width)`.
-- [x] Add `NativeTextLayout` with width, height, line count, first-line ascent, line metrics, and rects-for-range.
-- [ ] Add `NativeCanvas::draw_text_layout(layout, x, y)`.
-- [ ] Keep `draw_text_box()` as a convenience API if still useful, but do not make Studio rely on it.
+- [ ] Add `NativeTextEngine::layout_rich_text(spans, base_style, max_width)`.
+- [ ] Add `NativeTextLayout` with width, height, line count, first-line ascent, line metrics, and rects-for-range.
+- [x] Add `NativeCanvas::draw_text_layout(layout, x, y)`.
+- [x] Keep `draw_text_box()` as a convenience API if still useful, but do not make Studio rely on it.
 
 Tests:
 
-- [ ] Simple text draws visible pixels.
-- [ ] Center/right alignment uses max width.
-- [ ] Wrapping changes line count and height.
+- [x] Simple text draws visible pixels.
+- [x] Center/right alignment uses max width.
+- [x] Wrapping changes line count and height.
 - [ ] Rich spans preserve per-span color, weight, letter spacing, and baseline shift.
 - [ ] `get_rects_for_range()` supports baseline-shift overlay placement.
-- [ ] Registered fonts are used before generic fallbacks.
+- [x] Registered fonts are used before generic fallbacks.
 - [ ] Variable font weight can pass through as a non-integer value when supported.
 
 ## Chunk 7: Studio Renderer Contract Adapter Proof
