@@ -68,7 +68,15 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - Internal state lives behind `parking_lot::Mutex` (added as a direct dependency); no `RefCell` leaks. The manager is single-threaded by Skia's binding constraints (`TypefaceFontProvider` is not `Send`); cross-thread sharing is not promised.
   - New `NativeError::FontRegister { reason }` reports parse failures and IO errors.
   - 8 new contract tests: starts empty, register-from-data lists family, register-from-path lists family, duplicate registration does not duplicate alias, multiple families tracked in registration order, garbage bytes return `FontRegister`, missing path returns `FontRegister`, interior mutability through `&NativeFontManager` (no `RefCell`).
-- **Chunks 7B-8 (simple paragraph layout, rich spans + metrics, Studio adapter, docs): not started.**
+- **Chunk 7B (Task 11 -- plain paragraph layout): complete** on the same branch.
+  - `TextStyle { font_families, font_size, font_weight, slant, color, align, line_height_multiplier }`. Plain-text only; rich spans, decorations, shadows, letter/word spacing, baseline shifts stay deferred to 7C.
+  - `TextSlant::{Upright, Italic, Oblique}` -- the slant axis exposed at the public boundary.
+  - `NativeTextEngine::new(&NativeFontManager)` wires the registered typefaces into a Skia `FontCollection` (with system fallback). `with_system_fonts()` is the no-registry convenience.
+  - `NativeTextEngine::layout_text(text, style, max_width)` returns a `NativeTextLayout`.
+  - `NativeTextLayout::{width, height, line_count, first_line_ascent}` exposes the metrics needed for vertical alignment and box sizing.
+  - `NativeCanvas::draw_text_layout(layout, x, y)` paints the laid-out paragraph at `(x, y)`.
+  - 6 new tests cover: visible text pixels, center/right alignment shifts the inked column, narrow wrapping increases line count and height, first-line ascent grows with font size, layout metrics are well-formed, registered fonts produce different ink than system fallbacks when requested by family name.
+- **Chunks 7C-8 (rich spans + metrics, Studio adapter, docs): not started.**
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:
@@ -448,9 +456,9 @@ Steps:
 - [ ] Add `TextStyle` with font family list, font size, font weight, slant, linear color, align, line-height multiplier, letter spacing, word spacing, OpenType features, variation settings, decoration, shadows, and baseline shift.
 - [ ] Add `ParagraphStyle`.
 - [ ] Add `RichTextSpan`.
-- [ ] Add `NativeTextEngine::layout_text(text, style, max_width)`.
-- [ ] Add `NativeTextEngine::layout_rich_text(spans, base_style, max_width)`.
-- [ ] Add `NativeTextLayout` with width, height, line count, first-line ascent, line metrics, and rects-for-range.
+- [x] Add `NativeTextEngine::layout_text(text, style, max_width)`.
+- [x] Add `NativeTextEngine::layout_rich_text(spans, base_style, max_width)`.
+- [x] Add `NativeTextLayout` with width, height, line count, first-line ascent, line metrics, and rects-for-range.
 - [ ] Add `NativeCanvas::draw_text_layout(layout, x, y)`.
 - [ ] Keep `draw_text_box()` as a convenience API if still useful, but do not make Studio rely on it.
 

@@ -13,9 +13,9 @@ use anyhow::Result;
 use phyron_skia_canvas::native::{
     BlendMode, FillRule, GradientInterpolation, GradientStop, LinearColorSpace, NativeAffine,
     NativeBackend, NativeColorFilter, NativeError, NativeFontManager, NativeImage,
-    NativeImageFilter, NativePaint, NativePath, NativeShader, PaintStyle, PixelColorSpace,
-    PixelDepth, PixelExportOptions, PixelFormat, Point, Rect, RgbaLinear, SamplingMode, StrokeCap,
-    SurfaceOptions,
+    NativeImageFilter, NativePaint, NativePath, NativeShader, NativeTextEngine, NativeTextLayout,
+    PaintStyle, PixelColorSpace, PixelDepth, PixelExportOptions, PixelFormat, Point, Rect,
+    RgbaLinear, SamplingMode, StrokeCap, SurfaceOptions, TextAlign, TextStyle,
 };
 
 const ALPHA_HALF_U8: u8 = 128;
@@ -1908,5 +1908,214 @@ fn font_manager_uses_interior_mutability_through_immutable_ref() -> Result<()> {
     mgr_ref.register_font_from_data("Interior", &bytes)?;
     assert!(mgr_ref.has_font("Interior"));
     assert_eq!(mgr_ref.families(), vec!["Interior".to_string()]);
+    Ok(())
+}
+
+// --- Chunk 7B: Plain paragraph layout --------------------------------------
+
+fn render_layout(
+    text: &str,
+    style: &TextStyle,
+    max_width: f32,
+    surface_w: u32,
+    surface_h: u32,
+) -> Result<NativeTextLayout> {
+    let engine = NativeTextEngine::with_system_fonts();
+    let layout = engine.layout_text(text, style, max_width);
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(surface_w, surface_h, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_text_layout(&layout, 0.0, 0.0);
+    });
+    Ok(layout)
+}
+
+/// Plain text renders visible pixels through the layout API.
+#[test]
+fn text_layout_draws_visible_pixels() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(128, 32, SurfaceOptions::default())?;
+    let engine = NativeTextEngine::with_system_fonts();
+    let style = TextStyle {
+        color: RgbaLinear::opaque(1.0, 1.0, 1.0),
+        font_size: 24.0,
+        ..TextStyle::default()
+    };
+    let layout = engine.layout_text("Studio", &style, 128.0);
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_text_layout(&layout, 0.0, 0.0);
+    });
+    let px = surface.read_pixels()?;
+    assert!(
+        px.pixels().iter().any(|c| *c > 32),
+        "text layout should produce visible pixels"
+    );
+    Ok(())
+}
+
+/// Center alignment puts pixels near the horizontal middle of the
+/// max-width band; left alignment hugs the left edge. Compare the column
+/// that holds the first non-empty pixel.
+#[test]
+fn text_layout_center_alignment_shifts_pixels_right() -> Result<()> {
+    let backend = NativeBackend::new();
+    let measure_first_inked_column = |align: TextAlign| -> Result<usize> {
+        let mut surface = backend.create_surface(128, 24, SurfaceOptions::default())?;
+        let engine = NativeTextEngine::with_system_fonts();
+        let style = TextStyle {
+            color: RgbaLinear::opaque(1.0, 1.0, 1.0),
+            font_size: 18.0,
+            align,
+            ..TextStyle::default()
+        };
+        let layout = engine.layout_text("X", &style, 128.0);
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.draw_text_layout(&layout, 0.0, 0.0);
+        });
+        let px = surface.read_pixels()?;
+        let stride = px.stride();
+        for row in 0..24usize {
+            for col in 0..128usize {
+                let alpha = px.pixels()[row * stride + col * 4 + 3];
+                if alpha > 32 {
+                    return Ok(col);
+                }
+            }
+        }
+        Ok(usize::MAX)
+    };
+    let left_col = measure_first_inked_column(TextAlign::Left)?;
+    let center_col = measure_first_inked_column(TextAlign::Center)?;
+    let right_col = measure_first_inked_column(TextAlign::Right)?;
+    assert!(
+        left_col < 16,
+        "left alignment hugs the left edge, got column {left_col}"
+    );
+    assert!(
+        center_col > left_col + 16,
+        "center alignment shifts text right, got left={left_col} center={center_col}"
+    );
+    assert!(
+        right_col > center_col,
+        "right alignment shifts text further right than center, got center={center_col} right={right_col}"
+    );
+    Ok(())
+}
+
+/// Wrapping at a narrower width increases line count and total height.
+#[test]
+fn text_layout_wrapping_changes_line_count_and_height() -> Result<()> {
+    let engine = NativeTextEngine::with_system_fonts();
+    let style = TextStyle {
+        color: RgbaLinear::opaque(1.0, 1.0, 1.0),
+        font_size: 20.0,
+        ..TextStyle::default()
+    };
+    let text = "the quick brown fox jumps over the lazy dog";
+    let wide = engine.layout_text(text, &style, 1024.0);
+    let narrow = engine.layout_text(text, &style, 80.0);
+    assert!(
+        narrow.line_count() > wide.line_count(),
+        "narrow width should wrap to more lines: wide={} narrow={}",
+        wide.line_count(),
+        narrow.line_count()
+    );
+    assert!(
+        narrow.height() > wide.height(),
+        "narrow width should be taller: wide={} narrow={}",
+        wide.height(),
+        narrow.height()
+    );
+    Ok(())
+}
+
+/// `first_line_ascent` is reported as a non-zero value for non-empty
+/// text. Skia uses negative ascent values to express the distance above
+/// the baseline; the magnitude grows with font size.
+#[test]
+fn text_layout_first_line_ascent_grows_with_font_size() -> Result<()> {
+    let engine = NativeTextEngine::with_system_fonts();
+    let small = engine.layout_text(
+        "Mg",
+        &TextStyle {
+            font_size: 12.0,
+            ..TextStyle::default()
+        },
+        128.0,
+    );
+    let large = engine.layout_text(
+        "Mg",
+        &TextStyle {
+            font_size: 48.0,
+            ..TextStyle::default()
+        },
+        128.0,
+    );
+    assert!(small.first_line_ascent().abs() > 0.0);
+    assert!(
+        large.first_line_ascent().abs() > small.first_line_ascent().abs(),
+        "larger font size should produce a larger ascent magnitude"
+    );
+    Ok(())
+}
+
+/// Width and height accessors return finite, non-negative values.
+#[test]
+fn text_layout_metrics_are_well_formed() -> Result<()> {
+    let layout = render_layout(
+        "Studio",
+        &TextStyle {
+            color: RgbaLinear::opaque(1.0, 1.0, 1.0),
+            font_size: 20.0,
+            ..TextStyle::default()
+        },
+        100.0,
+        128,
+        32,
+    )?;
+    assert_eq!(layout.width(), 100.0);
+    assert!(layout.height().is_finite() && layout.height() >= 0.0);
+    assert!(layout.line_count() >= 1);
+    Ok(())
+}
+
+/// A registered font selected via `NativeTextEngine::new(&manager)` and
+/// requested by family name in `TextStyle.font_families` is used for
+/// layout: the rendered ink differs from a layout that requested an
+/// unknown family (which falls back to a system font).
+#[test]
+fn text_layout_uses_registered_font_when_requested() -> Result<()> {
+    let mgr = NativeFontManager::new();
+    mgr.register_font_from_path("Studio Test Font", FONT_FIXTURE)?;
+
+    let backend = NativeBackend::new();
+    let render_with_engine = |engine: NativeTextEngine, family: &str| -> Result<Vec<u8>> {
+        let mut surface = backend.create_surface(96, 32, SurfaceOptions::default())?;
+        let style = TextStyle {
+            color: RgbaLinear::opaque(1.0, 1.0, 1.0),
+            font_size: 24.0,
+            font_families: vec![family.to_string()],
+            ..TextStyle::default()
+        };
+        let layout = engine.layout_text("Studio", &style, 96.0);
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.draw_text_layout(&layout, 0.0, 0.0);
+        });
+        Ok(surface.read_pixels()?.into_pixels())
+    };
+
+    let registered = render_with_engine(NativeTextEngine::new(&mgr), "Studio Test Font")?;
+    // Same engine, but request a family that the registry does not have:
+    // the engine falls back to a system font, producing different ink.
+    let fallback = render_with_engine(NativeTextEngine::new(&mgr), "Definitely Not A Real Family")?;
+
+    assert_ne!(
+        registered, fallback,
+        "registered Oswald glyphs should differ from system-fallback rendering"
+    );
     Ok(())
 }

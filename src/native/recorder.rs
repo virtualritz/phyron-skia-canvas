@@ -14,7 +14,7 @@ use crate::native::paint::NativePaint;
 use crate::native::path::NativePath;
 use crate::native::pixels::{RawFrame, RawFrameOptions, SamplingMode, SurfaceOptions};
 use crate::native::surface::NativeSurface;
-use crate::native::text::{TextAlign, TextBoxOptions, VerticalAlign};
+use crate::native::text::{NativeTextLayout, TextAlign, TextBoxOptions, VerticalAlign};
 
 pub struct NativeRecorder {
     recorder: PageRecorder,
@@ -266,6 +266,14 @@ impl NativeCanvas<'_> {
         paint.set_alpha_f(opacity.clamp(0.0, 1.0));
         self.canvas
             .draw_image_rect(&image.inner, None, dst_rect, &paint);
+    }
+
+    /// Paint a `NativeTextLayout` produced by `NativeTextEngine` at
+    /// `(x, y)` (the paragraph's top-left). Layout-time alignment from
+    /// the `TextStyle` controls horizontal positioning within the
+    /// paragraph's max width.
+    pub fn draw_text_layout(&mut self, layout: &NativeTextLayout, x: f32, y: f32) {
+        layout.paragraph.paint(self.canvas, (x, y));
     }
 
     pub fn draw_text_box(&mut self, text: &str, rect: Rect, options: &TextBoxOptions) {

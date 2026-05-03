@@ -38,4 +38,7 @@ pub use pixels::{
 pub use recorder::{NativeCanvas, NativeRecorder};
 pub use shader::{GradientInterpolation, GradientStop, NativeShader};
 pub use surface::NativeSurface;
-pub use text::{TextAlign, TextBoxOptions, VerticalAlign};
+pub use text::{
+    NativeTextEngine, NativeTextLayout, TextAlign, TextBoxOptions, TextSlant, TextStyle,
+    VerticalAlign,
+};

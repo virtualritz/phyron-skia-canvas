@@ -89,4 +89,13 @@ impl NativeFontManager {
         let inner = self.inner.lock();
         inner.families.clone()
     }
+
+    /// Internal accessor used by `NativeTextEngine` to wire the registry
+    /// into a paragraph `FontCollection`. Returns a clone of the
+    /// `TypefaceFontProvider` (Skia-side ref-counted, so the clone
+    /// shares typeface storage with the manager).
+    pub(crate) fn snapshot_provider(&self) -> TypefaceFontProvider {
+        let inner = self.inner.lock();
+        inner.provider.clone()
+    }
 }
