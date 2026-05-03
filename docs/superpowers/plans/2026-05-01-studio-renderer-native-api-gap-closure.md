@@ -89,7 +89,19 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - The frame exercises every required surface area: solid background, SVG path with fill rule, linear gradient via shader, raw RGBA8 image (no PNG/JPEG/WebP round trip), clip-path mask, image filter inside `save_layer`, paragraph layout with a registered font, and offscreen composition with `BlendMode::PlusLighter`.
   - 2 tests pass: `adapter_renders_full_frame_through_native_facade_only` (full-frame readback) and `adapter_uses_only_native_namespace` (compile-time pin against future Skia escape hatches).
   - Audit `rg -n "use skia_safe" tests/native_studio_renderer_adapter.rs` returns only doc-comment hits referring to the audit itself; the test imports nothing outside `phyron_skia_canvas::native`. Audit `rg -n 'from_encoded\|png_encoder\|jpeg_encoder\|webp_encoder' tests/native_studio_renderer_adapter.rs` is similarly clean for the hot path.
-- **Chunks 8B-8C (docs / final verification, downstream Studio proof): not started.**
+- **Chunk 8B (Tasks 14-15 -- docs and final verification): complete** on the same branch.
+  - README "Rust Library Consumers" section updated to current API: `NativeBackend` + `NativeSurface` + `NativePaint` (the original `NativeRecorder`/`ShapePaint` example is replaced).
+  - New `docs/api/native-rust.md` consolidates the consumer-facing reference: stability commitment, working vs export color spaces, premultiplied alpha conventions, pixel formats and depths, surface/recorder/canvas, paint, paths, shaders, filters, images, text, fonts, errors, and verification commands.
+  - All gates green on Linux with feature subset `vulkan,window,freetype`:
+    - `just fmt-check` passes.
+    - `just check` passes.
+    - `just lint-check` passes (zero warnings).
+    - `cargo test --features "vulkan,window,freetype" --test native_api_contract` -- 5 pass.
+    - `cargo test --features "vulkan,window,freetype" --test native_studio_renderer_contract` -- 83 pass.
+    - `cargo test --features "vulkan,window,freetype" --test native_studio_renderer_adapter` -- 2 pass.
+    - Total: 90 contract tests passing.
+  - Audits clean: `pub` signatures in `src/native` carry no `skia_safe`/Neon/`RefCell` types; `src/native` and tests carry no `unwrap`/`expect`/`panic!`/`todo!`/`unimplemented!`; the adapter test imports nothing outside `phyron_skia_canvas::native` plus `anyhow`/`std`.
+- **Chunk 8C (Task 13 -- downstream Studio proof in `desktop-app`): not started** -- replace direct `skia-safe` dependency with `phyron-skia-canvas`, run `studio-render-native` parity checks. Different repo, separate PR.
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:
@@ -538,12 +550,12 @@ cargo clippy -p studio-render-native --all-targets --features native-video-rsmpe
 
 Steps:
 
-- [ ] Document that `phyron_skia_canvas::native` is the only supported Rust consumer API.
-- [ ] Document that `skia_safe` remains a private implementation detail.
-- [ ] Document linear working spaces clearly: `Srgb`, `DisplayP3`, and `Rec2020` are all linear-light spaces with their own primaries. They are not aliases for linear sRGB.
-- [ ] Document that HDR channel values above `1.0` are valid internally.
-- [ ] Document premultiplied alpha as the internal Studio convention.
-- [ ] Document which readback modes return unpremultiplied pixels for external APIs like `putImageData`.
+- [x] Document that `phyron_skia_canvas::native` is the only supported Rust consumer API.
+- [x] Document that `skia_safe` remains a private implementation detail.
+- [x] Document linear working spaces clearly: `Srgb`, `DisplayP3`, and `Rec2020` are all linear-light spaces with their own primaries. They are not aliases for linear sRGB.
+- [x] Document that HDR channel values above `1.0` are valid internally.
+- [x] Document premultiplied alpha as the internal Studio convention.
+- [x] Document which readback modes return unpremultiplied pixels for external APIs like `putImageData`.
 
 ### Task 15: Final verification.
 

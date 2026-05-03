@@ -26,26 +26,40 @@ let canvas = new Canvas(1920, 1080, {
 
 Rust consumers should use `phyron_skia_canvas::native`. That facade is the stable Rust API and intentionally hides Neon and `skia-safe` types. The older public modules exist for Node/Neon compatibility and are not the preferred API for new Rust consumers.
 
+See [`docs/api/native-rust.md`](docs/api/native-rust.md) for the full reference (color spaces, alpha, surfaces, paint, paths, shaders, filters, images, text, fonts).
+
 ```rust
 use phyron_skia_canvas::native::{
-    LinearColorSpace, NativeRecorder, PixelFormat, RawFrameOptions, Rect, RgbaLinear,
-    ShapePaint, SurfaceOptions,
+    LinearColorSpace, NativeBackend, NativePaint, PixelExportOptions, Rect, RgbaLinear,
+    SurfaceOptions,
 };
 
-let mut recorder = NativeRecorder::new(Rect::from_xywh(0.0, 0.0, 1920.0, 1080.0))?;
-recorder.record(|canvas| {
-    canvas.clear(RgbaLinear::opaque(0.0, 0.0, 0.0));
+let backend = NativeBackend::new();
+let mut surface = backend.create_surface(
+    1920,
+    1080,
+    SurfaceOptions {
+        color_space: LinearColorSpace::DisplayP3,
+        ..SurfaceOptions::default()
+    },
+)?;
+
+surface.with_canvas(|canvas| {
+    canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
     canvas.draw_rect(
         Rect::from_xywh(100.0, 100.0, 200.0, 100.0),
-        &ShapePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+        &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
     );
 });
 
-let frame = recorder.render_raw(
-    SurfaceOptions { color_space: LinearColorSpace::DisplayP3, ..Default::default() },
-    RawFrameOptions { pixel_format: PixelFormat::Rgba8UnormUnpremul, ..Default::default() },
-)?;
+// Default `read_pixels()` returns tight RGBA8, sRGB-gamma, unpremultiplied
+// pixels -- the `putImageData` wire format. Use `read_pixels_linear()` for
+// F32 linear-light pixels in the surface's working color space, or
+// `read_pixels_as(PixelExportOptions { ... })` to pick an exact target.
+let frame = surface.read_pixels()?;
 ```
+
+Public signatures in `phyron_skia_canvas::native` never expose `skia_safe` or `neon` types. The crate is verified by an audit against `src/native` plus a compile-time pin in `tests/native_studio_renderer_adapter.rs`.
 
 ---
 

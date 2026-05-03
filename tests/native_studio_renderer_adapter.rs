@@ -228,29 +228,28 @@ fn adapter_renders_full_frame_through_native_facade_only() -> Result<()> {
         renderer.draw_rect(canvas, Rect::from_xywh(0.0, 0.0, 192.0, 96.0), &bg);
     });
 
-    // 2. SVG path with even-odd fill rule.
+    // 2. SVG path with non-zero fill rule. Build the path outside the
+    //    `with_canvas` closure so failures surface via `?` rather than
+    //    panicking inside an `FnOnce`.
+    let triangle_path = NativePath::from_svg("M8 60 L40 30 L72 60 Z", FillRule::NonZero)?;
     main.with_canvas(|canvas| {
         let mut paint = NativePaint::fill(RgbaLinear::opaque(0.2, 0.7, 1.0));
         paint.set_anti_alias(true);
-        renderer
-            .draw_svg_path(canvas, "M8 60 L40 30 L72 60 Z", FillRule::NonZero, &paint)
-            .expect("svg path renders");
+        canvas.draw_path(&triangle_path, &paint);
     });
 
     // 3. Linear gradient shader on a rect.
+    let gradient = renderer.linear_gradient(
+        Point::new(96.0, 0.0),
+        Point::new(192.0, 0.0),
+        &[
+            (0.0, RgbaLinear::opaque(1.0, 0.0, 0.0)),
+            (1.0, RgbaLinear::opaque(0.0, 0.0, 1.0)),
+        ],
+    )?;
     main.with_canvas(|canvas| {
-        let shader = renderer
-            .linear_gradient(
-                Point::new(96.0, 0.0),
-                Point::new(192.0, 0.0),
-                &[
-                    (0.0, RgbaLinear::opaque(1.0, 0.0, 0.0)),
-                    (1.0, RgbaLinear::opaque(0.0, 0.0, 1.0)),
-                ],
-            )
-            .expect("gradient builds");
         let mut paint = NativePaint::default();
-        paint.set_shader(Some(shader));
+        paint.set_shader(Some(gradient));
         renderer.draw_rect(canvas, Rect::from_xywh(96.0, 0.0, 96.0, 32.0), &paint);
     });
 
@@ -266,13 +265,13 @@ fn adapter_renders_full_frame_through_native_facade_only() -> Result<()> {
         );
     });
 
-    // 5. Mask via clip_path: inside a rounded triangle clip, draw a
-    //    full-surface white rect; outside the clip stays untouched.
+    // 5. Mask via clip_path: inside a triangle clip, draw a full-region
+    //    white rect; outside the clip stays as background. The clip
+    //    path is built outside the closure for the same FnOnce reason.
+    let clip_path = NativePath::from_svg("M150 50 L184 50 L167 86 Z", FillRule::NonZero)?;
     main.with_canvas(|canvas| {
         renderer.save(canvas);
-        renderer
-            .clip_svg_path(canvas, "M150 50 L184 50 L167 86 Z", FillRule::NonZero)
-            .expect("clip path");
+        canvas.clip_path(&clip_path);
         let fg = NativePaint::fill(RgbaLinear::opaque(1.0, 1.0, 1.0));
         renderer.draw_rect(canvas, Rect::from_xywh(140.0, 40.0, 56.0, 56.0), &fg);
         renderer.restore(canvas);
@@ -280,9 +279,10 @@ fn adapter_renders_full_frame_through_native_facade_only() -> Result<()> {
 
     // 6. Image filter via save_layer: blur a rect inside an isolated
     //    layer, then composite the blurred result onto the main surface.
+    let blur = renderer.blur_filter(2.5, 2.5)?;
+    let mut layer_paint = NativePaint::default();
+    layer_paint.set_image_filter(Some(blur));
     main.with_canvas(|canvas| {
-        let mut layer_paint = NativePaint::default();
-        layer_paint.set_image_filter(Some(renderer.blur_filter(2.5, 2.5).expect("blur")));
         renderer.save_layer(canvas, Some(&layer_paint));
         let inner = NativePaint::fill(RgbaLinear::opaque(0.9, 0.4, 0.1));
         renderer.draw_rect(canvas, Rect::from_xywh(50.0, 50.0, 32.0, 32.0), &inner);
