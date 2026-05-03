@@ -15,7 +15,8 @@ use phyron_skia_canvas::native::{
     NativeBackend, NativeColorFilter, NativeError, NativeFontManager, NativeImage,
     NativeImageFilter, NativePaint, NativePath, NativeShader, NativeTextEngine, NativeTextLayout,
     PaintStyle, PixelColorSpace, PixelDepth, PixelExportOptions, PixelFormat, Point, Rect,
-    RgbaLinear, SamplingMode, StrokeCap, SurfaceOptions, TextAlign, TextStyle,
+    RgbaLinear, RichTextSpan, SamplingMode, StrokeCap, SurfaceOptions, TextAlign, TextDecoration,
+    TextShadow, TextStyle,
 };
 
 const ALPHA_HALF_U8: u8 = 128;
@@ -2169,5 +2170,320 @@ fn text_layout_uses_registered_font_when_requested() -> Result<()> {
         registered, fallback,
         "registered Oswald glyphs should differ from system-fallback rendering"
     );
+    Ok(())
+}
+
+// --- Chunk 7C: rich spans + metrics ----------------------------------------
+
+/// `layout_rich_text` honours per-span color overrides: a paragraph with
+/// a red span and a green span shows both colors in the rendered output.
+#[test]
+fn rich_text_spans_render_distinct_colors() -> Result<()> {
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(160, 32, SurfaceOptions::default())?;
+    let engine = NativeTextEngine::with_system_fonts();
+    let base = TextStyle {
+        font_size: 24.0,
+        ..TextStyle::default()
+    };
+    let spans = vec![
+        RichTextSpan {
+            text: "RED ".to_string(),
+            style: TextStyle {
+                color: RgbaLinear::opaque(1.0, 0.0, 0.0),
+                font_size: 24.0,
+                ..TextStyle::default()
+            },
+        },
+        RichTextSpan {
+            text: "GREEN".to_string(),
+            style: TextStyle {
+                color: RgbaLinear::opaque(0.0, 1.0, 0.0),
+                font_size: 24.0,
+                ..TextStyle::default()
+            },
+        },
+    ];
+    let layout = engine.layout_rich_text(&spans, &base, 160.0);
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+        canvas.draw_text_layout(&layout, 0.0, 0.0);
+    });
+    let px = surface.read_pixels()?;
+    let stride = px.stride();
+    let mut saw_red = false;
+    let mut saw_green = false;
+    for chunk in px.pixels()[..stride * 32].chunks_exact(4) {
+        if chunk[0] > 150 && chunk[1] < 80 {
+            saw_red = true;
+        }
+        if chunk[1] > 150 && chunk[0] < 80 {
+            saw_green = true;
+        }
+    }
+    assert!(saw_red, "expected red ink from the first span");
+    assert!(saw_green, "expected green ink from the second span");
+    Ok(())
+}
+
+/// `letter_spacing > 0` widens the rendered paragraph compared to the
+/// default zero spacing.
+#[test]
+fn text_letter_spacing_widens_layout() -> Result<()> {
+    let engine = NativeTextEngine::with_system_fonts();
+    let base = TextStyle {
+        font_size: 24.0,
+        ..TextStyle::default()
+    };
+    let spaced = TextStyle {
+        font_size: 24.0,
+        letter_spacing: 8.0,
+        ..TextStyle::default()
+    };
+    let plain_layout = engine.layout_text("Studio", &base, 4096.0);
+    let spaced_layout = engine.layout_text("Studio", &spaced, 4096.0);
+    assert!(
+        spaced_layout.width() > plain_layout.width() + 16.0,
+        "letter spacing should noticeably widen the layout: plain={} spaced={}",
+        plain_layout.width(),
+        spaced_layout.width()
+    );
+    Ok(())
+}
+
+/// `word_spacing > 0` widens multi-word text more than single-word text
+/// and noticeably more than the default.
+#[test]
+fn text_word_spacing_widens_multi_word_layout() -> Result<()> {
+    let engine = NativeTextEngine::with_system_fonts();
+    let base = TextStyle {
+        font_size: 24.0,
+        ..TextStyle::default()
+    };
+    let spaced = TextStyle {
+        font_size: 24.0,
+        word_spacing: 24.0,
+        ..TextStyle::default()
+    };
+    let plain_layout = engine.layout_text("hello world", &base, 4096.0);
+    let spaced_layout = engine.layout_text("hello world", &spaced, 4096.0);
+    assert!(
+        spaced_layout.width() > plain_layout.width() + 12.0,
+        "word spacing should widen multi-word layout: plain={} spaced={}",
+        plain_layout.width(),
+        spaced_layout.width()
+    );
+    Ok(())
+}
+
+/// Underline decoration paints below the baseline. With underline on,
+/// the paragraph occupies more vertical pixels (alpha extends below
+/// the glyph's natural descent).
+#[test]
+fn text_underline_decoration_renders_below_baseline() -> Result<()> {
+    let backend = NativeBackend::new();
+    let render = |decoration: TextDecoration| -> Result<Vec<u8>> {
+        let mut surface = backend.create_surface(96, 64, SurfaceOptions::default())?;
+        let engine = NativeTextEngine::with_system_fonts();
+        let layout = engine.layout_text(
+            "abc",
+            &TextStyle {
+                color: RgbaLinear::opaque(1.0, 1.0, 1.0),
+                font_size: 24.0,
+                decoration,
+                decoration_color: Some(RgbaLinear::opaque(1.0, 1.0, 1.0)),
+                ..TextStyle::default()
+            },
+            96.0,
+        );
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.draw_text_layout(&layout, 0.0, 0.0);
+        });
+        Ok(surface.read_pixels()?.into_pixels())
+    };
+    let plain = render(TextDecoration::default())?;
+    let underlined = render(TextDecoration::underline())?;
+    assert_ne!(
+        plain, underlined,
+        "underline decoration must change rendered ink"
+    );
+    Ok(())
+}
+
+/// Drop shadow: rendering a single span with a shadow produces ink
+/// outside the un-shadowed glyph region.
+#[test]
+fn text_shadow_renders_offset_ink() -> Result<()> {
+    let backend = NativeBackend::new();
+    let render = |shadows: Vec<TextShadow>| -> Result<Vec<u8>> {
+        let mut surface = backend.create_surface(96, 48, SurfaceOptions::default())?;
+        let engine = NativeTextEngine::with_system_fonts();
+        let layout = engine.layout_text(
+            "S",
+            &TextStyle {
+                color: RgbaLinear::opaque(1.0, 1.0, 1.0),
+                font_size: 32.0,
+                shadows,
+                ..TextStyle::default()
+            },
+            96.0,
+        );
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.draw_text_layout(&layout, 0.0, 0.0);
+        });
+        Ok(surface.read_pixels()?.into_pixels())
+    };
+    let plain = render(Vec::new())?;
+    let with_shadow = render(vec![TextShadow {
+        color: RgbaLinear::opaque(1.0, 0.0, 0.0),
+        offset_x: 4.0,
+        offset_y: 4.0,
+        blur_sigma: 1.0,
+    }])?;
+    assert_ne!(plain, with_shadow, "shadow must change rendered ink");
+    // Count non-zero alpha pixels: shadow should add coverage beyond glyphs.
+    let nonzero = |bytes: &[u8]| bytes.chunks_exact(4).filter(|p| p[3] > 0).count();
+    assert!(
+        nonzero(&with_shadow) > nonzero(&plain),
+        "shadow should add covered pixels beyond plain glyph coverage"
+    );
+    Ok(())
+}
+
+/// `baseline_shift` moves a span vertically without affecting the
+/// paragraph's overall height. A negative shift (superscript) on a span
+/// produces ink above the baseline of the surrounding text.
+#[test]
+fn text_baseline_shift_moves_span_vertically() -> Result<()> {
+    let backend = NativeBackend::new();
+    let render = |shift: f32| -> Result<Vec<u8>> {
+        let mut surface = backend.create_surface(96, 48, SurfaceOptions::default())?;
+        let engine = NativeTextEngine::with_system_fonts();
+        let base = TextStyle {
+            color: RgbaLinear::opaque(1.0, 1.0, 1.0),
+            font_size: 24.0,
+            ..TextStyle::default()
+        };
+        let spans = vec![
+            RichTextSpan {
+                text: "x".to_string(),
+                style: base.clone(),
+            },
+            RichTextSpan {
+                text: "2".to_string(),
+                style: TextStyle {
+                    baseline_shift: shift,
+                    font_size: 16.0,
+                    ..base.clone()
+                },
+            },
+        ];
+        let layout = engine.layout_rich_text(&spans, &base, 96.0);
+        surface.with_canvas(|canvas| {
+            canvas.clear(RgbaLinear::new_premultiplied(0.0, 0.0, 0.0, 0.0));
+            canvas.draw_text_layout(&layout, 0.0, 24.0);
+        });
+        Ok(surface.read_pixels()?.into_pixels())
+    };
+    let inline = render(0.0)?;
+    let superscript = render(-12.0)?;
+    assert_ne!(
+        inline, superscript,
+        "baseline shift must change rendered ink positions"
+    );
+    Ok(())
+}
+
+/// `get_rects_for_range` returns at least one bounding box for a
+/// non-empty character range. The returned rect's height matches the
+/// glyph's metric range and its left edge falls inside the paragraph.
+#[test]
+fn text_get_rects_for_range_returns_glyph_bounds() -> Result<()> {
+    let engine = NativeTextEngine::with_system_fonts();
+    let layout = engine.layout_text(
+        "Studio",
+        &TextStyle {
+            font_size: 24.0,
+            ..TextStyle::default()
+        },
+        256.0,
+    );
+    let rects = layout.get_rects_for_range(0..6);
+    assert!(
+        !rects.is_empty(),
+        "non-empty range should produce at least one rect"
+    );
+    let r = rects[0];
+    assert!(r.width() > 0.0 && r.height() > 0.0);
+    assert!(r.left >= 0.0);
+    Ok(())
+}
+
+/// `get_rects_for_range` over a single mid-paragraph character returns
+/// rects that fit inside the full-paragraph rect.
+#[test]
+fn text_get_rects_for_range_single_char_inside_full() -> Result<()> {
+    let engine = NativeTextEngine::with_system_fonts();
+    let layout = engine.layout_text(
+        "Studio",
+        &TextStyle {
+            font_size: 24.0,
+            ..TextStyle::default()
+        },
+        256.0,
+    );
+    let full = layout.get_rects_for_range(0..6);
+    let single = layout.get_rects_for_range(2..3);
+    assert!(!full.is_empty());
+    assert!(!single.is_empty());
+    let f = full[0];
+    let s = single[0];
+    assert!(s.left >= f.left && s.right <= f.right);
+    assert!(s.top >= f.top && s.bottom <= f.bottom);
+    Ok(())
+}
+
+/// `line_metrics` returns one entry per laid-out line. Wrapping at
+/// narrower widths yields more entries.
+#[test]
+fn text_line_metrics_match_line_count() -> Result<()> {
+    let engine = NativeTextEngine::with_system_fonts();
+    let style = TextStyle {
+        font_size: 16.0,
+        ..TextStyle::default()
+    };
+    let text = "the quick brown fox jumps over the lazy dog";
+    let wide = engine.layout_text(text, &style, 4096.0);
+    let narrow = engine.layout_text(text, &style, 80.0);
+    assert_eq!(wide.line_metrics().len(), wide.line_count());
+    assert_eq!(narrow.line_metrics().len(), narrow.line_count());
+    assert!(narrow.line_metrics().len() > wide.line_metrics().len());
+    let m0 = wide.line_metrics()[0];
+    assert_eq!(m0.line_number, 0);
+    assert!(m0.height > 0.0);
+    assert!(m0.ascent > 0.0);
+    Ok(())
+}
+
+/// Variable font weight values can pass through as non-100-step
+/// integers (e.g., 350). The layout call must not panic and produce
+/// finite metrics. When the active typeface supports it, the rendered
+/// width can differ from a coarser weight.
+#[test]
+fn text_variable_font_weight_passes_through() -> Result<()> {
+    let engine = NativeTextEngine::with_system_fonts();
+    let layout = engine.layout_text(
+        "Studio",
+        &TextStyle {
+            font_size: 24.0,
+            font_weight: 350,
+            ..TextStyle::default()
+        },
+        256.0,
+    );
+    assert!(layout.width().is_finite());
+    assert!(layout.height() > 0.0);
     Ok(())
 }

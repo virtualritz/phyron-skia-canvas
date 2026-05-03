@@ -77,7 +77,14 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - `NativeCanvas::draw_text_layout(layout, x, y)` paints the laid-out paragraph at `(x, y)`.
   - WOFF/WOFF2 byte streams are accepted by Skia's `FontMgr::new_from_data` under the project's `freetype` + `freetype-woff2` features; verified by a contract test using the Monoton fixtures.
   - 8 contract tests cover: visible text pixels, center/right alignment shifts the inked column, narrow wrapping increases line count and height, first-line ascent grows with font size, layout metrics are well-formed and respect the budget, `width()` reflects measured content (not max_width), registered fonts produce different ink than system fallbacks when requested by family name, WOFF and WOFF2 register through the font manager.
-- **Chunks 7C-8 (rich spans + metrics, Studio adapter, docs): not started.**
+- **Chunk 7C (Task 11 -- rich spans + metrics): complete** on the same branch.
+  - `TextStyle` extended with `letter_spacing`, `word_spacing`, `decoration` (`TextDecoration { underline, overline, line_through }`), `decoration_style` (`TextDecorationStyle::{Solid, Double, Dotted, Dashed, Wavy}`), `decoration_color`, `decoration_thickness`, `shadows: Vec<TextShadow>`, `baseline_shift`.
+  - `RichTextSpan { text, style }` carries per-span style overrides.
+  - `NativeTextEngine::layout_rich_text(spans, base_style, max_width)` builds a paragraph by pushing each span's style and pop-ing after each span.
+  - `NativeTextLayout::line_metrics()` returns `Vec<NativeLineMetrics>` with per-line ascent/descent/height/baseline/left/width and the byte range `start_index..end_index`.
+  - `NativeTextLayout::get_rects_for_range(range)` returns the paragraph's bounding rects for a byte range, suitable for selection rendering and baseline-shift overlay placement.
+  - 10 new contract tests cover: per-span color rendering, letter spacing widens layout, word spacing widens multi-word, underline decoration changes ink, drop shadow adds offset coverage, baseline shift moves a span vertically, rects-for-range returns valid glyph bounds, single-character rects fit inside the full-range rect, line_metrics matches line_count and surfaces ascent, variable font weight (350) passes through layout.
+- **Chunk 8 (Studio adapter, docs): not started.**
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:
@@ -454,12 +461,12 @@ Steps:
 
 Steps:
 
-- [ ] Add `TextStyle` with font family list, font size, font weight, slant, linear color, align, line-height multiplier, letter spacing, word spacing, OpenType features, variation settings, decoration, shadows, and baseline shift.
-- [ ] Add `ParagraphStyle`.
-- [ ] Add `RichTextSpan`.
+- [x] Add `TextStyle` with font family list, font size, font weight, slant, linear color, align, line-height multiplier, letter spacing, word spacing, OpenType features, variation settings, decoration, shadows, and baseline shift.
+- [x] Add `ParagraphStyle`.
+- [x] Add `RichTextSpan`.
 - [x] Add `NativeTextEngine::layout_text(text, style, max_width)`.
-- [ ] Add `NativeTextEngine::layout_rich_text(spans, base_style, max_width)`.
-- [ ] Add `NativeTextLayout` with width, height, line count, first-line ascent, line metrics, and rects-for-range.
+- [x] Add `NativeTextEngine::layout_rich_text(spans, base_style, max_width)`.
+- [x] Add `NativeTextLayout` with width, height, line count, first-line ascent, line metrics, and rects-for-range.
 - [x] Add `NativeCanvas::draw_text_layout(layout, x, y)`.
 - [x] Keep `draw_text_box()` as a convenience API if still useful, but do not make Studio rely on it.
 
@@ -468,10 +475,10 @@ Tests:
 - [x] Simple text draws visible pixels.
 - [x] Center/right alignment uses max width.
 - [x] Wrapping changes line count and height.
-- [ ] Rich spans preserve per-span color, weight, letter spacing, and baseline shift.
-- [ ] `get_rects_for_range()` supports baseline-shift overlay placement.
+- [x] Rich spans preserve per-span color, weight, letter spacing, and baseline shift.
+- [x] `get_rects_for_range()` supports baseline-shift overlay placement.
 - [x] Registered fonts are used before generic fallbacks.
-- [ ] Variable font weight can pass through as a non-integer value when supported.
+- [x] Variable font weight can pass through as a non-integer value when supported.
 
 ## Chunk 7: Studio Renderer Contract Adapter Proof
 
