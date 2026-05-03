@@ -268,10 +268,10 @@ Steps:
 Run:
 
 ```bash
-cargo test --all-features --test native_studio_renderer_contract
+cargo test --features "vulkan,window,freetype" --test native_studio_renderer_contract
 ```
 
-Expected result: tests fail to compile until Chunks 2-5 add the API.
+Expected result: tests fail to compile until Chunks 2-5 add the API. Do not use `--all-features` on Linux; `metal` enables Apple framework-linked crates.
 
 ### Task 2: Add public leak audits.
 
@@ -565,9 +565,9 @@ Run:
 just fmt-check
 just check
 just lint-check
-cargo test --all-features --test native_api_contract
-cargo test --all-features --test native_studio_renderer_contract
-cargo test --all-features --test native_studio_renderer_adapter
+cargo test --features "vulkan,window,freetype" --test native_api_contract
+cargo test --features "vulkan,window,freetype" --test native_studio_renderer_contract
+cargo test --features "vulkan,window,freetype" --test native_studio_renderer_adapter
 ```
 
 If `lib/skia.node` exists or a build is acceptable in the current environment, also run:
