@@ -1893,6 +1893,21 @@ fn font_manager_missing_path_returns_font_register_error() {
     assert!(matches!(result, Err(NativeError::FontRegister { .. })));
 }
 
+/// WOFF and WOFF2 byte streams are accepted by the registered Skia
+/// build (`freetype` + `freetype-woff2` features). This pins WOFF/WOFF2
+/// support so the public claim does not drift from what Skia decodes.
+#[test]
+fn font_manager_accepts_woff_and_woff2() -> Result<()> {
+    let mgr = NativeFontManager::new();
+    let woff = std::fs::read("tests/assets/fonts/Monoton-Regular.woff")?;
+    mgr.register_font_from_data("Monoton WOFF", &woff)?;
+    assert!(mgr.has_font("Monoton WOFF"));
+    let woff2 = std::fs::read("tests/assets/fonts/Monoton-Regular.woff2")?;
+    mgr.register_font_from_data("Monoton WOFF2", &woff2)?;
+    assert!(mgr.has_font("Monoton WOFF2"));
+    Ok(())
+}
+
 /// `NativeFontManager` uses `parking_lot::Mutex` for interior
 /// mutability rather than `RefCell`, so registration and queries can
 /// share the same `&NativeFontManager` reference. (Cross-thread
@@ -2062,7 +2077,9 @@ fn text_layout_first_line_ascent_grows_with_font_size() -> Result<()> {
     Ok(())
 }
 
-/// Width and height accessors return finite, non-negative values.
+/// `width()` returns the measured longest-line width (not the wrapping
+/// budget); `max_width()` returns the budget. `height()` is finite and
+/// non-negative; `line_count()` is at least 1 for non-empty input.
 #[test]
 fn text_layout_metrics_are_well_formed() -> Result<()> {
     let layout = render_layout(
@@ -2076,9 +2093,44 @@ fn text_layout_metrics_are_well_formed() -> Result<()> {
         128,
         32,
     )?;
-    assert_eq!(layout.width(), 100.0);
+    assert_eq!(layout.max_width(), 100.0);
+    assert!(layout.width().is_finite() && layout.width() >= 0.0);
+    assert!(
+        layout.width() <= layout.max_width(),
+        "measured width {} should not exceed max_width {}",
+        layout.width(),
+        layout.max_width()
+    );
+    assert!(
+        layout.width() > 0.0,
+        "non-empty text should have positive measured width"
+    );
     assert!(layout.height().is_finite() && layout.height() >= 0.0);
     assert!(layout.line_count() >= 1);
+    Ok(())
+}
+
+/// `width()` is strictly less than `max_width()` when the laid-out text
+/// is shorter than the wrapping budget. This pins the new measured
+/// semantics against the pre-fix behavior where `width()` returned
+/// `max_width` regardless of content.
+#[test]
+fn text_layout_width_reflects_measured_content_not_max_width() -> Result<()> {
+    let engine = NativeTextEngine::with_system_fonts();
+    let layout = engine.layout_text(
+        "i", // single-character paragraph; well under any sane budget
+        &TextStyle {
+            font_size: 16.0,
+            ..TextStyle::default()
+        },
+        4096.0,
+    );
+    assert_eq!(layout.max_width(), 4096.0);
+    assert!(
+        layout.width() < 200.0,
+        "measured width should be small for one glyph, got {}",
+        layout.width()
+    );
     Ok(())
 }
 

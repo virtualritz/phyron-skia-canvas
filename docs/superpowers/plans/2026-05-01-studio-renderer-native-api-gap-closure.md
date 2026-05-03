@@ -73,9 +73,10 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - `TextSlant::{Upright, Italic, Oblique}` -- the slant axis exposed at the public boundary.
   - `NativeTextEngine::new(&NativeFontManager)` wires the registered typefaces into a Skia `FontCollection` (with system fallback). `with_system_fonts()` is the no-registry convenience.
   - `NativeTextEngine::layout_text(text, style, max_width)` returns a `NativeTextLayout`.
-  - `NativeTextLayout::{width, height, line_count, first_line_ascent}` exposes the metrics needed for vertical alignment and box sizing.
+  - `NativeTextLayout::width()` returns the **measured longest-line width** (matches the TS renderer's `TextLayout.width` semantics), not the wrapping budget. `max_width()` recovers the caller-requested budget. `height()`, `line_count()`, and `first_line_ascent()` expose the rest of the metrics needed for vertical alignment and box sizing.
   - `NativeCanvas::draw_text_layout(layout, x, y)` paints the laid-out paragraph at `(x, y)`.
-  - 6 new tests cover: visible text pixels, center/right alignment shifts the inked column, narrow wrapping increases line count and height, first-line ascent grows with font size, layout metrics are well-formed, registered fonts produce different ink than system fallbacks when requested by family name.
+  - WOFF/WOFF2 byte streams are accepted by Skia's `FontMgr::new_from_data` under the project's `freetype` + `freetype-woff2` features; verified by a contract test using the Monoton fixtures.
+  - 8 contract tests cover: visible text pixels, center/right alignment shifts the inked column, narrow wrapping increases line count and height, first-line ascent grows with font size, layout metrics are well-formed and respect the budget, `width()` reflects measured content (not max_width), registered fonts produce different ink than system fallbacks when requested by family name, WOFF and WOFF2 register through the font manager.
 - **Chunks 7C-8 (rich spans + metrics, Studio adapter, docs): not started.**
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
@@ -376,7 +377,7 @@ Steps:
 - [x] Add `NativeColorFilter::compose(outer, inner)`.
 - [x] Add `NativeImageFilter::from_color_filter(color_filter, input)`.
 - [x] Add `NativeImageFilter::compose(outer, inner)`.
-- [ ] Add `NativeShader::linear_gradient(start, end, stops, interpolation)`.
+- [x] Add `NativeShader::linear_gradient(start, end, stops, interpolation)`.
 
 Tests:
 
@@ -384,8 +385,8 @@ Tests:
 - [x] Drop shadow produces offset pixels.
 - [x] Color matrix can replace RGB for ID-buffer rendering while thresholding alpha.
 - [x] Luma color filter works with `destination-in`/`destination-out` mask paths.
-- [ ] Linear gradient renders sorted color stops.
-- [ ] `oklch` interpolation is either implemented or rejected with a typed error. Do not silently use sRGB if the caller requested `oklch`.
+- [x] Linear gradient renders sorted color stops.
+- [x] `oklch` interpolation is either implemented or rejected with a typed error. Do not silently use sRGB if the caller requested `oklch`.
 
 ## Chunk 5: Images, SVG, And Raw Decoded Frames
 
@@ -400,7 +401,7 @@ Tests:
 Steps:
 
 - [x] Add `NativeImage::from_pixels(bytes, width, height, stride, pixel_format, color_space)`.
-- [ ] Add a borrowed-slice constructor if it is safe; otherwise document the copy and keep owned data.
+- [x] Add a borrowed-slice constructor if it is safe; otherwise document the copy and keep owned data.
 - [x] Validate stride, dimensions, byte length, alpha mode, and color space.
 - [x] Support RGBA8 premul/unpremul, RGBA16F premul, and RGBA32F premul.
 - [x] Use this as the intended bridge for rsmpeg decoded video frames and Citra-generated images.

@@ -142,7 +142,7 @@ impl NativeTextEngine {
         paragraph.layout(max_width);
         NativeTextLayout {
             paragraph,
-            requested_width: max_width,
+            max_width,
         }
     }
 }
@@ -152,13 +152,22 @@ impl NativeTextEngine {
 /// the same paragraph onto a canvas.
 pub struct NativeTextLayout {
     pub(crate) paragraph: SkParagraph,
-    requested_width: f32,
+    max_width: f32,
 }
 
 impl NativeTextLayout {
-    /// The `max_width` requested at layout time.
+    /// Measured width of the longest laid-out line, after wrapping.
+    /// Matches the `TextLayout.width` semantics in the TypeScript
+    /// renderer: the width that the laid-out content actually occupies,
+    /// not the wrapping budget. Use `max_width()` to recover the
+    /// caller-requested layout budget.
     pub fn width(&self) -> f32 {
-        self.requested_width
+        self.paragraph.longest_line()
+    }
+
+    /// The `max_width` (wrapping budget) requested at layout time.
+    pub fn max_width(&self) -> f32 {
+        self.max_width
     }
 
     /// Total height of the laid-out paragraph after wrapping.
