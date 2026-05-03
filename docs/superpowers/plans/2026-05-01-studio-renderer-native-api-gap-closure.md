@@ -84,7 +84,12 @@ API changes are approved by Moritz on 2026-05-01 for this work. This plan is a f
   - `NativeTextLayout::line_metrics()` returns `Vec<NativeLineMetrics>` with per-line ascent/descent/height/baseline/left/width and the byte range `start_index..end_index`.
   - `NativeTextLayout::get_rects_for_range(range)` returns the paragraph's bounding rects for a byte range, suitable for selection rendering and baseline-shift overlay placement.
   - 10 new contract tests cover: per-span color rendering, letter spacing widens layout, word spacing widens multi-word, underline decoration changes ink, drop shadow adds offset coverage, baseline shift moves a span vertically, rects-for-range returns valid glyph bounds, single-character rects fit inside the full-range rect, line_metrics matches line_count and surfaces ascent, variable font weight (350) passes through layout.
-- **Chunk 8 (Studio adapter, docs): not started.**
+- **Chunk 8A (Task 12 -- p-s-c adapter contract test): complete** on the same branch. Chunk 8 was sub-split per reviewer guidance into 8A (adapter test), 8B (docs and final verify), 8C (downstream Studio proof in `desktop-app`).
+  - `tests/native_studio_renderer_adapter.rs` defines a local `RendererAdapter` mirroring TS `DrawBackend` method names and renders a representative frame end-to-end through `phyron_skia_canvas::native` only.
+  - The frame exercises every required surface area: solid background, SVG path with fill rule, linear gradient via shader, raw RGBA8 image (no PNG/JPEG/WebP round trip), clip-path mask, image filter inside `save_layer`, paragraph layout with a registered font, and offscreen composition with `BlendMode::PlusLighter`.
+  - 2 tests pass: `adapter_renders_full_frame_through_native_facade_only` (full-frame readback) and `adapter_uses_only_native_namespace` (compile-time pin against future Skia escape hatches).
+  - Audit `rg -n "use skia_safe" tests/native_studio_renderer_adapter.rs` returns only doc-comment hits referring to the audit itself; the test imports nothing outside `phyron_skia_canvas::native`. Audit `rg -n 'from_encoded\|png_encoder\|jpeg_encoder\|webp_encoder' tests/native_studio_renderer_adapter.rs` is similarly clean for the hot path.
+- **Chunks 8B-8C (docs / final verification, downstream Studio proof): not started.**
 - Per reviewer feedback, tests for later chunks land alongside their implementation chunks to keep every commit green.
 
 The first plan delivered a minimum Rust facade:
@@ -490,10 +495,10 @@ Tests:
 
 Steps:
 
-- [ ] Write a small Rust-only adapter that mirrors the TypeScript `DrawBackend` contract names locally inside the test.
-- [ ] Render a shape, image, text, mask, filter, and offscreen composition through that adapter.
-- [ ] Assert the adapter never imports `skia_safe`.
-- [ ] Assert no PNG/JPEG/WebP encode is used in the hot path.
+- [x] Write a small Rust-only adapter that mirrors the TypeScript `DrawBackend` contract names locally inside the test.
+- [x] Render a shape, image, text, mask, filter, and offscreen composition through that adapter.
+- [x] Assert the adapter never imports `skia_safe`.
+- [x] Assert no PNG/JPEG/WebP encode is used in the hot path.
 
 This test is intentionally in p-s-c so API gaps are caught before Studio tries to migrate.
 
