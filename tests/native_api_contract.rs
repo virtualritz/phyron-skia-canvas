@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use phyron_skia_canvas::native::{
-    LinearColorSpace, NativeImage, NativeRecorder, PixelFormat, RawFrameOptions, Rect, RgbaLinear,
-    ShapePaint, SurfaceOptions, TextBoxOptions,
+    LinearColorSpace, NativeImage, NativePaint, NativeRecorder, PixelFormat, RawFrameOptions, Rect,
+    RgbaLinear, SurfaceOptions, TextBoxOptions,
 };
 
 #[test]
@@ -12,7 +12,7 @@ fn native_facade_renders_tight_rgba8_without_importing_skia_safe() -> Result<()>
         canvas.clear(RgbaLinear::opaque(0.0, 0.0, 0.0));
         canvas.draw_rect(
             Rect::from_xywh(2.0, 2.0, 4.0, 4.0),
-            &ShapePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
         );
     });
 
@@ -64,16 +64,16 @@ fn native_facade_draws_shapes() -> Result<()> {
         canvas.clear(RgbaLinear::opaque(0.0, 0.0, 0.0));
         canvas.draw_rect(
             Rect::from_xywh(4.0, 4.0, 16.0, 16.0),
-            &ShapePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
+            &NativePaint::fill(RgbaLinear::opaque(1.0, 0.0, 0.0)),
         );
         canvas.draw_rounded_rect(
             Rect::from_xywh(24.0, 4.0, 16.0, 16.0),
             4.0,
-            &ShapePaint::stroke(RgbaLinear::opaque(0.0, 1.0, 0.0), 2.0),
+            &NativePaint::stroke(RgbaLinear::opaque(0.0, 1.0, 0.0), 2.0),
         );
         canvas.draw_oval(
             Rect::from_xywh(44.0, 4.0, 16.0, 16.0),
-            &ShapePaint::fill(RgbaLinear::opaque(0.0, 0.0, 1.0)),
+            &NativePaint::fill(RgbaLinear::opaque(0.0, 0.0, 1.0)),
         );
     });
     let frame = recorder.render_raw(SurfaceOptions::default(), RawFrameOptions::default())?;

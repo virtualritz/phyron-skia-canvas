@@ -30,6 +30,74 @@ pub struct Rect {
     pub bottom: f32,
 }
 
+/// 2D affine transform in `[a, b, c, d, tx, ty]` form, matching the
+/// CSS `DOMMatrix2DInit` and `CanvasRenderingContext2D.setTransform`
+/// convention. Acts on a column vector `[x, y, 1]^T`:
+///
+/// ```text
+/// | a  c  tx |   | x |
+/// | b  d  ty | * | y |
+/// | 0  0  1  |   | 1 |
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct NativeAffine {
+    pub a: f32,
+    pub b: f32,
+    pub c: f32,
+    pub d: f32,
+    pub tx: f32,
+    pub ty: f32,
+}
+
+impl NativeAffine {
+    pub const IDENTITY: NativeAffine = NativeAffine {
+        a: 1.0,
+        b: 0.0,
+        c: 0.0,
+        d: 1.0,
+        tx: 0.0,
+        ty: 0.0,
+    };
+
+    pub fn translation(tx: f32, ty: f32) -> Self {
+        Self {
+            tx,
+            ty,
+            ..Self::IDENTITY
+        }
+    }
+
+    pub fn scale(sx: f32, sy: f32) -> Self {
+        Self {
+            a: sx,
+            d: sy,
+            ..Self::IDENTITY
+        }
+    }
+
+    pub fn rotation_radians(angle: f32) -> Self {
+        let (s, c) = angle.sin_cos();
+        Self {
+            a: c,
+            b: s,
+            c: -s,
+            d: c,
+            tx: 0.0,
+            ty: 0.0,
+        }
+    }
+
+    pub fn rotation_degrees(angle: f32) -> Self {
+        Self::rotation_radians(angle.to_radians())
+    }
+}
+
+impl Default for NativeAffine {
+    fn default() -> Self {
+        Self::IDENTITY
+    }
+}
+
 impl Rect {
     pub fn from_xywh(x: f32, y: f32, width: f32, height: f32) -> Self {
         Self {

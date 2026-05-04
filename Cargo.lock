@@ -1571,6 +1571,7 @@ dependencies = [
  "neon",
  "objc",
  "once_cell",
+ "parking_lot",
  "process_path",
  "raw-window-handle 0.6.2",
  "raw-window-metal",

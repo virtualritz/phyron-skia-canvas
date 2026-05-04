@@ -1,17 +1,20 @@
 use skia_safe::{
-    Canvas as SkCanvas, Color4f, ColorType, ImageInfo, Paint, PaintStyle, Point as SkPoint, RRect,
+    Canvas as SkCanvas, Color4f, ColorType, ImageInfo, Matrix, Paint, Point as SkPoint, RRect,
     Rect as SkRect,
+    canvas::{SaveLayerRec, SrcRectConstraint},
 };
 
 use crate::context::page::{ExportOptions, PageRecorder};
 use crate::gpu::RenderingEngine;
 use crate::native::color::RgbaLinear;
 use crate::native::error::NativeError;
-use crate::native::geometry::{Point, Rect};
+use crate::native::geometry::{NativeAffine, Point, Rect};
 use crate::native::image::NativeImage;
-use crate::native::paint::ShapePaint;
-use crate::native::pixels::{RawFrame, RawFrameOptions, SurfaceOptions};
-use crate::native::text::{TextAlign, TextBoxOptions, VerticalAlign};
+use crate::native::paint::NativePaint;
+use crate::native::path::NativePath;
+use crate::native::pixels::{RawFrame, RawFrameOptions, SamplingMode, SurfaceOptions};
+use crate::native::surface::NativeSurface;
+use crate::native::text::{NativeTextLayout, TextAlign, TextBoxOptions, VerticalAlign};
 
 pub struct NativeRecorder {
     recorder: PageRecorder,
@@ -128,56 +131,132 @@ impl NativeCanvas<'_> {
         self.canvas.rotate(degrees, pivot);
     }
 
-    pub fn draw_rect(&mut self, rect: Rect, paint: &ShapePaint) {
-        let sk_rect = to_sk_rect(rect);
-        if let Some(fill) = paint.fill {
-            let p = make_paint(fill, PaintStyle::Fill, 0.0, paint.anti_alias);
-            self.canvas.draw_rect(sk_rect, &p);
-        }
-        if let Some(stroke) = paint.stroke {
-            let p = make_paint(
-                stroke,
-                PaintStyle::Stroke,
-                paint.stroke_width,
-                paint.anti_alias,
-            );
-            self.canvas.draw_rect(sk_rect, &p);
+    pub fn scale(&mut self, sx: f32, sy: f32) {
+        self.canvas.scale((sx, sy));
+    }
+
+    /// Concatenate an affine transform onto the current canvas matrix.
+    /// `transform` is in `[a, b, c, d, tx, ty]` form (CSS DOMMatrix2DInit).
+    pub fn concat_transform(&mut self, transform: NativeAffine) {
+        let matrix = Matrix::from_affine(&[
+            transform.a,
+            transform.b,
+            transform.c,
+            transform.d,
+            transform.tx,
+            transform.ty,
+        ]);
+        self.canvas.concat(&matrix);
+    }
+
+    /// Push an isolated drawing layer. Subsequent draws accumulate into the
+    /// layer until `restore()`; on restore the layer is composited onto the
+    /// destination using `paint`'s alpha, blend mode, and (eventually)
+    /// filters. Pass `None` for a transparent isolation buffer with default
+    /// composition.
+    pub fn save_layer(&mut self, paint: Option<&NativePaint>) {
+        if let Some(p) = paint {
+            let sk_paint = p.to_skia_paint();
+            let rec = SaveLayerRec::default().paint(&sk_paint);
+            self.canvas.save_layer(&rec);
+        } else {
+            let rec = SaveLayerRec::default();
+            self.canvas.save_layer(&rec);
         }
     }
 
-    pub fn draw_rounded_rect(&mut self, rect: Rect, radius: f32, paint: &ShapePaint) {
-        let sk_rect = to_sk_rect(rect);
-        let rrect = RRect::new_rect_xy(sk_rect, radius, radius);
-        if let Some(fill) = paint.fill {
-            let p = make_paint(fill, PaintStyle::Fill, 0.0, paint.anti_alias);
-            self.canvas.draw_rrect(rrect, &p);
-        }
-        if let Some(stroke) = paint.stroke {
-            let p = make_paint(
-                stroke,
-                PaintStyle::Stroke,
-                paint.stroke_width,
-                paint.anti_alias,
-            );
-            self.canvas.draw_rrect(rrect, &p);
-        }
+    /// Intersect the current clip with `rect`. Subsequent draws outside the
+    /// clip are discarded. Pair with `save()`/`restore()` to scope the clip.
+    pub fn clip_rect(&mut self, rect: Rect) {
+        self.canvas.clip_rect(to_sk_rect(rect), None, true);
     }
 
-    pub fn draw_oval(&mut self, rect: Rect, paint: &ShapePaint) {
-        let sk_rect = to_sk_rect(rect);
-        if let Some(fill) = paint.fill {
-            let p = make_paint(fill, PaintStyle::Fill, 0.0, paint.anti_alias);
-            self.canvas.draw_oval(sk_rect, &p);
-        }
-        if let Some(stroke) = paint.stroke {
-            let p = make_paint(
-                stroke,
-                PaintStyle::Stroke,
-                paint.stroke_width,
-                paint.anti_alias,
-            );
-            self.canvas.draw_oval(sk_rect, &p);
-        }
+    /// Intersect the current clip with the rounded rect formed by `rect` and
+    /// the given corner `radius`.
+    pub fn clip_rrect(&mut self, rect: Rect, radius: f32) {
+        let rrect = RRect::new_rect_xy(to_sk_rect(rect), radius, radius);
+        self.canvas.clip_rrect(rrect, None, true);
+    }
+
+    /// Intersect the current clip with `path`. The path's fill rule decides
+    /// which interior regions are kept.
+    pub fn clip_path(&mut self, path: &NativePath) {
+        self.canvas.clip_path(&path.inner, None, true);
+    }
+
+    /// Fill or stroke `path` according to `paint`. The path's fill rule
+    /// (`NonZero` / `EvenOdd`) decides interior coverage on fills.
+    pub fn draw_path(&mut self, path: &NativePath, paint: &NativePaint) {
+        self.canvas.draw_path(&path.inner, &paint.to_skia_paint());
+    }
+
+    /// Stroke a line segment from `p1` to `p2` using the paint's stroke
+    /// width, cap, dash, and anti-alias state. The paint should be a
+    /// stroke-style paint; fill style produces no output.
+    pub fn draw_line(&mut self, p1: Point, p2: Point, paint: &NativePaint) {
+        self.canvas.draw_line(
+            SkPoint::new(p1.x, p1.y),
+            SkPoint::new(p2.x, p2.y),
+            &paint.to_skia_paint(),
+        );
+    }
+
+    /// Draw the `src` rect of `image` into the `dst` rect on this canvas
+    /// using the given sampling mode. Optional `paint` controls alpha and
+    /// blend mode of the composite. Pixels outside `src` are not sampled
+    /// (strict source rect constraint).
+    pub fn draw_image_src(
+        &mut self,
+        image: &NativeImage,
+        src: Rect,
+        dst: Rect,
+        paint: Option<&NativePaint>,
+        sampling: SamplingMode,
+    ) {
+        let src_rect = to_sk_rect(src);
+        let dst_rect = to_sk_rect(dst);
+        let sk_paint = paint.map(|p| p.to_skia_paint());
+        let default_paint = Paint::default();
+        let p_ref = sk_paint.as_ref().unwrap_or(&default_paint);
+        self.canvas.draw_image_rect_with_sampling_options(
+            &image.inner,
+            Some((&src_rect, SrcRectConstraint::Strict)),
+            dst_rect,
+            sampling.to_skia(),
+            p_ref,
+        );
+    }
+
+    /// Composite `source`'s current contents onto this canvas at `(x, y)`.
+    /// Optional `paint` controls alpha and blend mode of the composite. The
+    /// source is snapshotted internally; the source is borrowed mutably
+    /// because Skia requires mut access for snapshotting.
+    pub fn draw_surface(
+        &mut self,
+        source: &mut NativeSurface,
+        x: f32,
+        y: f32,
+        paint: Option<&NativePaint>,
+    ) {
+        let image = source.snapshot();
+        let sk_paint = paint.map(|p| p.to_skia_paint());
+        self.canvas
+            .draw_image(&image.inner, SkPoint::new(x, y), sk_paint.as_ref());
+    }
+
+    pub fn draw_rect(&mut self, rect: Rect, paint: &NativePaint) {
+        self.canvas
+            .draw_rect(to_sk_rect(rect), &paint.to_skia_paint());
+    }
+
+    pub fn draw_rounded_rect(&mut self, rect: Rect, radius: f32, paint: &NativePaint) {
+        let rrect = RRect::new_rect_xy(to_sk_rect(rect), radius, radius);
+        self.canvas.draw_rrect(rrect, &paint.to_skia_paint());
+    }
+
+    pub fn draw_oval(&mut self, rect: Rect, paint: &NativePaint) {
+        self.canvas
+            .draw_oval(to_sk_rect(rect), &paint.to_skia_paint());
     }
 
     pub fn draw_image_rect(&mut self, image: &NativeImage, dst: Rect, opacity: f32) {
@@ -187,6 +266,14 @@ impl NativeCanvas<'_> {
         paint.set_alpha_f(opacity.clamp(0.0, 1.0));
         self.canvas
             .draw_image_rect(&image.inner, None, dst_rect, &paint);
+    }
+
+    /// Paint a `NativeTextLayout` produced by `NativeTextEngine` at
+    /// `(x, y)` (the paragraph's top-left). Layout-time alignment from
+    /// the `TextStyle` controls horizontal positioning within the
+    /// paragraph's max width.
+    pub fn draw_text_layout(&mut self, layout: &NativeTextLayout, x: f32, y: f32) {
+        layout.paragraph.paint(self.canvas, (x, y));
     }
 
     pub fn draw_text_box(&mut self, text: &str, rect: Rect, options: &TextBoxOptions) {
@@ -258,13 +345,4 @@ fn to_unpremul_color4f(c: RgbaLinear) -> Color4f {
     } else {
         Color4f::new(0.0, 0.0, 0.0, 0.0)
     }
-}
-
-fn make_paint(color: RgbaLinear, style: PaintStyle, stroke_width: f32, anti_alias: bool) -> Paint {
-    let mut paint = Paint::default();
-    paint.set_color4f(to_unpremul_color4f(color), None);
-    paint.set_style(style);
-    paint.set_stroke_width(stroke_width);
-    paint.set_anti_alias(anti_alias);
-    paint
 }
