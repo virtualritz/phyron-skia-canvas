@@ -1,10 +1,10 @@
-# `phyron_skia_canvas::native` -- Rust Consumer API
+# `skia_canvas::native` -- Rust Consumer API
 
-`phyron_skia_canvas::native` is the only supported Rust consumer API for this crate. The older modules under the crate root (`canvas`, `context`, `paragraph`, ...) exist for Node / Neon compatibility and intentionally leak `skia_safe` and Neon types in their public signatures; they are not the supported surface for new Rust consumers.
+`skia_canvas::native` is the only supported Rust consumer API for this crate. The older modules under the crate root (`canvas`, `context`, `paragraph`, ...) exist for Node / Neon compatibility and intentionally leak `skia_safe` and Neon types in their public signatures; they are not the supported surface for new Rust consumers.
 
 ## Stability commitment
 
-- Public types in `phyron_skia_canvas::native` do **not** expose `skia_safe`, `neon`, `RefCell`, `FunctionContext`, `JsBox`, or `Handle<...>`.
+- Public types in `skia_canvas::native` do **not** expose `skia_safe`, `neon`, `RefCell`, `FunctionContext`, `JsBox`, or `Handle<...>`.
 - `skia_safe` remains a private implementation detail. Wrapping or aliasing Skia types in `pub` signatures is treated as an API regression.
 - The audit `rg -n "pub .*skia_safe|pub .*FunctionContext|pub .*JsBox|pub .*Handle<|pub .*RefCell" src/native` returns no matches; CI guards this.
 - A compile-time pin in `tests/native_studio_renderer_adapter.rs` references the full Studio-shaped adapter surface, so any future patch that smuggles a Skia type into a public method breaks the test.

@@ -1,4 +1,4 @@
-//! Renderer contract tests for the `phyron_skia_canvas::native` facade.
+//! Renderer contract tests for the `skia_canvas::native` facade.
 //!
 //! Tests in this file exercise the surface, pixel IO, and paint/blend
 //! subsets (Chunks 2 and 3A of the Studio renderer gap closure plan).
@@ -10,7 +10,7 @@
 //!   rg -n "pub .*skia_safe|pub .*FunctionContext|pub .*JsBox|pub .*Handle<|pub .*RefCell" src/native
 
 use anyhow::Result;
-use phyron_skia_canvas::native::{
+use skia_canvas::native::{
     BlendMode, FillRule, GradientInterpolation, GradientStop, LinearColorSpace, NativeAffine,
     NativeBackend, NativeColorFilter, NativeError, NativeFontManager, NativeImage,
     NativeImageFilter, NativePaint, NativePath, NativeShader, NativeTextEngine, NativeTextLayout,
@@ -213,7 +213,7 @@ fn premultiplied_alpha_preserved_across_read_modes() -> Result<()> {
     Ok(())
 }
 
-/// Compile-time leak audit: importing only `phyron_skia_canvas::native::*`
+/// Compile-time leak audit: importing only `skia_canvas::native::*`
 /// must be sufficient for surface + pixel IO contract use. This test
 /// references the new public types at run time so any accidental private
 /// scoping breaks the build.
