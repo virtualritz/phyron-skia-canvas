@@ -87,6 +87,8 @@ let canvas = new Canvas(1920, 1080, {
 
 The Node addon ships to npm as `phyron-skia-canvas`. The sections below cover Node-side installation, platform support, and the Canvas API.
 
+Public signatures in `phyron_skia_canvas::native` never expose `skia_safe` or `neon` types. The crate is verified by an audit against `src/native` plus a compile-time pin in `tests/native_studio_renderer_adapter.rs`.
+
 ---
 
 <a href="https://skia-canvas.org">
