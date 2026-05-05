@@ -2173,6 +2173,57 @@ fn text_layout_uses_registered_font_when_requested() -> Result<()> {
     Ok(())
 }
 
+// --- Color-space tagging regression (post-7C review) -----------------------
+
+/// Linear `RgbaLinear` values must round-trip through the rendering
+/// pipeline to the same sRGB byte that linearizes back. Pre-fix, paint's
+/// `set_color4f(.., None)` gamma-decoded the linear value a second time,
+/// so a linear input of ≈ 0.198 (sRGB byte 124) read back as byte ≈ 52.
+/// This test pins the fix.
+#[test]
+fn rgba_linear_round_trips_to_srgb_uint8_byte() -> Result<()> {
+    // Linearize sRGB byte 124: ((124/255 + 0.055)/1.055)^2.4 ≈ 0.1981.
+    let linear_input = 0.198_069_25_f32;
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(2, 2, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.draw_rect(
+            Rect::from_xywh(0.0, 0.0, 2.0, 2.0),
+            &NativePaint::fill(RgbaLinear::opaque(linear_input, linear_input, linear_input)),
+        );
+    });
+    let frame = surface.read_pixels()?;
+    let r = frame.pixels()[0];
+    let g = frame.pixels()[1];
+    let b = frame.pixels()[2];
+    assert!(
+        r.abs_diff(124) <= 2,
+        "linear 0.198 should round-trip to sRGB byte ≈ 124, got {r}"
+    );
+    assert!(g.abs_diff(124) <= 2, "g={g}");
+    assert!(b.abs_diff(124) <= 2, "b={b}");
+    Ok(())
+}
+
+/// `clear` honours the destination's working color space too. Same
+/// linear input → same sRGB byte 124 readback as `draw_rect`.
+#[test]
+fn rgba_linear_clear_round_trips_to_srgb_uint8_byte() -> Result<()> {
+    let linear_input = 0.198_069_25_f32;
+    let backend = NativeBackend::new();
+    let mut surface = backend.create_surface(2, 2, SurfaceOptions::default())?;
+    surface.with_canvas(|canvas| {
+        canvas.clear(RgbaLinear::opaque(linear_input, linear_input, linear_input));
+    });
+    let frame = surface.read_pixels()?;
+    let r = frame.pixels()[0];
+    assert!(
+        r.abs_diff(124) <= 2,
+        "linear 0.198 cleared on sRGB surface round-trips to ≈ 124, got {r}"
+    );
+    Ok(())
+}
+
 // --- Chunk 7C: rich spans + metrics ----------------------------------------
 
 /// `layout_rich_text` honours per-span color overrides: a paragraph with
